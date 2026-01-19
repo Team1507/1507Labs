@@ -38,12 +38,14 @@ import frc.robot.shooter.model.ShooterModel;
 import frc.robot.navigation.Nodes.Hub;
 import frc.robot.navigation.Nodes.AllianceZoneBlue;
 import frc.robot.navigation.Nodes.AllianceZoneRed;
-
+import frc.robot.Constants.Shooter.Flywheel;
 // Autos
 import frc.robot.auto.routines.OnePieceAuto;
 
 // Robot Extra
 import frc.robot.generated.TunerConstants;
+import frc.robot.mechanics.FlywheelModel;
+import frc.robot.mechanics.GearRatio;
 import frc.robot.utilities.Telemetry;
 import frc.robot.sim.FuelSimulator;
 
@@ -64,26 +66,39 @@ public class RobotContainer {
     // Shooter + Model
     // -----------------------------
 
+    private final GearRatio ratio = GearRatio.gearBox(2, 1);
+
+    private final FlywheelModel flywheel = new FlywheelModel(
+        Flywheel.INERTIA, 
+        Flywheel.MOTOR_KV,
+        Flywheel.MOTOR_KT,
+        Flywheel.MOTOR_RESISTANCE,
+        Flywheel.FRICTION_TORQUE,
+        Flywheel.GEAR_BOX
+    );
+    
     private final PoseSupplier poseSupplier = () -> drivetrain.getState().Pose;
 
     // Load model.json from deploy directory
     private final ShooterModel shooterModelConfig =
         ModelLoader.load("model.json", poseSupplier);
 
-        public final ShooterSubsystem shooterSubsystem =
-            new ShooterSubsystem(
-                new TalonFX(SHOOTER_CAN_ID),
-                shooterModelConfig,
-                poseSupplier,
-                Hub.CENTER // default target
-            );
+    public final ShooterSubsystem shooterSubsystem =
+        new ShooterSubsystem(
+            new TalonFX(SHOOTER_CAN_ID),
+            ratio,
+            flywheel,
+            shooterModelConfig,
+            poseSupplier,
+            Hub.CENTER // default target
+        );
 
-        public final ShotTrainer shotTrainer =
-            new ShotTrainer(
-                shooterSubsystem.getShooterMotor(),
-                poseSupplier,
-                Hub.CENTER.getTranslation()
-            );    
+    public final ShotTrainer shotTrainer =
+        new ShotTrainer(
+            shooterSubsystem.getShooterMotor(),
+            poseSupplier,
+            Hub.CENTER.getTranslation()
+        );    
 
     // -----------------------------
     // Autos
