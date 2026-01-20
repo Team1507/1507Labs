@@ -7,6 +7,9 @@ import com.ctre.phoenix6.controls.VelocityVoltage;
 
 // WPI Libraries
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
@@ -66,6 +69,12 @@ public class ShooterSubsystem extends SubsystemBase {
     /** Default target pose for model-driven shooters. */
     private static final Pose2d DEFAULT_TARGET_POSE = new Pose2d();
 
+    /** Default shooter pose for model-driven shooters. */
+    private static final Transform2d DEFAULT_SHOOTER_OFFSET = new Transform2d(
+            new Translation2d(0.0, 0.0), // X=2m, Y=0m
+            Rotation2d.fromDegrees(0)
+        );
+
     // ------------------------------------------------------------
     // Hardware
     // ------------------------------------------------------------
@@ -91,6 +100,9 @@ public class ShooterSubsystem extends SubsystemBase {
 
     /** Phoenix 6 uses motor RPS internally. */
     private double targetMotorRPS = 0.0;
+
+    /** Used to know where the robot is located relative to robot center */
+    private final Transform2d shooterOffset;
 
     // ------------------------------------------------------------
     // Simulation state
@@ -118,7 +130,8 @@ public class ShooterSubsystem extends SubsystemBase {
             DEFAULT_FLYWHEEL,
             DEFAULT_MODEL,
             DEFAULT_POSE_SUPPLIER,
-            DEFAULT_TARGET_POSE
+            DEFAULT_TARGET_POSE,
+            DEFAULT_SHOOTER_OFFSET
         );
     }
 
@@ -138,7 +151,8 @@ public class ShooterSubsystem extends SubsystemBase {
         TalonFX shooterMotor,
         ShooterModel model,
         PoseSupplier poseSupplier,
-        Pose2d targetPose
+        Pose2d targetPose,
+        Transform2d shooterOffset
     ) {
         this(
             shooterMotor,
@@ -146,7 +160,8 @@ public class ShooterSubsystem extends SubsystemBase {
             DEFAULT_FLYWHEEL,
             model,
             poseSupplier,
-            targetPose
+            targetPose,
+            shooterOffset
         );
     }
 
@@ -168,7 +183,8 @@ public class ShooterSubsystem extends SubsystemBase {
         GearRatio ratio,
         ShooterModel model,
         PoseSupplier poseSupplier,
-        Pose2d targetPose
+        Pose2d targetPose,
+        Transform2d shooterOffset
     ) {
         this(
             shooterMotor,
@@ -176,7 +192,8 @@ public class ShooterSubsystem extends SubsystemBase {
             DEFAULT_FLYWHEEL,
             model,
             poseSupplier,
-            targetPose
+            targetPose,
+            shooterOffset
         );
     }
 
@@ -206,7 +223,8 @@ public class ShooterSubsystem extends SubsystemBase {
         FlywheelModel flywheel,
         ShooterModel model,
         PoseSupplier poseSupplier,
-        Pose2d targetPose
+        Pose2d targetPose,
+        Transform2d shooterOffset
     ) {
         this.shooterMotor = shooterMotor;
         this.ratio = ratio;
@@ -214,6 +232,7 @@ public class ShooterSubsystem extends SubsystemBase {
         this.model = model;
         this.poseSupplier = poseSupplier;
         this.targetPose = targetPose;
+        this.shooterOffset = shooterOffset;
 
         configurePID();
     }
@@ -300,6 +319,13 @@ public class ShooterSubsystem extends SubsystemBase {
         return getTargetRPM() - getShooterRPM();
     }
 
+    /**
+     * @return pose of the shooter
+     */
+    public Pose2d getShooterPose() {
+        return poseSupplier.getPose().transformBy(shooterOffset);
+    }
+
     // ------------------------------------------------------------
     // Model-driven shooter update
     // ------------------------------------------------------------
@@ -310,8 +336,10 @@ public class ShooterSubsystem extends SubsystemBase {
      * @return telemetry snapshot
      */
     private ShotRecord buildTelemetry() {
-        Pose2d pose = poseSupplier.getPose();
-        double distance = pose.getTranslation().getDistance(targetPose.getTranslation());
+        Pose2d robotPose = poseSupplier.getPose();
+        Pose2d shooterPose = robotPose.transformBy(shooterOffset);
+
+        double distance = shooterPose.getTranslation().getDistance(targetPose.getTranslation());
 
         return new ShotRecord(
             getShooterRPM(),
@@ -319,7 +347,7 @@ public class ShooterSubsystem extends SubsystemBase {
             getStatorCurrent(),
             getSupplyCurrent(),
             getClosedLoopError(),
-            pose,
+            shooterPose,
             distance
         );
     }

@@ -90,7 +90,8 @@ public class RobotContainer {
             flywheel,
             shooterModelConfig,
             poseSupplier,
-            Hub.CENTER // default target
+            Hub.CENTER, // default target
+            SHOOTER_OFFSET
         );
 
     public final ShotTrainer shotTrainer =
