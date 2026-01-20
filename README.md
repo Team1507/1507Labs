@@ -47,14 +47,3 @@ If a feature shows promise, it can be refined and proposed for inclusion in **15
 2. Explore the `/experiments` and `/prototypes` directories  
 3. Read any notes or wikis attached to active projects  
 4. Start building something new
-
----
-
-If you want, I can also help you create:
-
-- a **directory structure** for 1507Labs  
-- a **wiki template** for documenting experiments  
-- a **promotion workflow** (Labs → Base)  
-- or a **badge/header graphic** for the README
-
-Which direction feels most fun to explore next — **structure**, **workflow**, or **documentation style**?
