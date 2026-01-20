@@ -37,7 +37,7 @@ import frc.robot.shooter.model.ShooterModel;
 // Nodes
 import frc.robot.navigation.Nodes.Hub;
 import frc.robot.navigation.Nodes.AllianceZoneBlue;
-import frc.robot.navigation.Nodes.AllianceZoneRed;
+//import frc.robot.navigation.Nodes.AllianceZoneRed;
 import frc.robot.Constants.Shooter.Flywheel;
 // Autos
 import frc.robot.auto.routines.OnePieceAuto;
