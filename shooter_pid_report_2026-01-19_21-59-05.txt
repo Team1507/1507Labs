@@ -1,0 +1,459 @@
+=== Shooter PID + Feedforward Tuning Test Starting ===
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_UP_STEP
+  Target: 400.0 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 1.8593800000000003 s
+  Settling time: 3.0191389999999996 s
+  Oscillation duration: 0.0 s (0 crossings)
+  Initial spike: 173.52007167351587 RPM/s
+  Correction spike: 0.0 RPM/s
+ PID Recommendation: Rise time is slow; increase Kp by ~10%.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_UP_STEP
+  Target: 800.0 RPM
+  Overshoot: 0.15140839117543692 RPM
+  Rise time: 1.8682079999999992 s
+  Settling time: 3.0074579999999997 s
+  Oscillation duration: 0.5803820000000002 s (1 crossings)
+  Initial spike: 168.9950214671613 RPM/s
+  Correction spike: 0.0 RPM/s
+ PID Recommendation: Rise time is slow; increase Kp by ~10%.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_UP_STEP
+  Target: 1200.0 RPM
+  Overshoot: 0.7337234840986184 RPM
+  Rise time: 1.8554889999999986 s
+  Settling time: 3.015561999999999 s
+  Oscillation duration: 0.439820000000001 s (1 crossings)
+  Initial spike: 172.69570772535678 RPM/s
+  Correction spike: 0.0 RPM/s
+ PID Recommendation: Rise time is slow; increase Kp by ~10%.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_UP_STEP
+  Target: 1600.0 RPM
+  Overshoot: 1.316027646426619 RPM
+  Rise time: 1.858569000000001 s
+  Settling time: 3.0189710000000005 s
+  Oscillation duration: 0.4001399999999986 s (1 crossings)
+  Initial spike: 180.29753143382663 RPM/s
+  Correction spike: 0.0 RPM/s
+ PID Recommendation: Rise time is slow; increase Kp by ~10%.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_UP_STEP
+  Target: 2000.0 RPM
+  Overshoot: 1.8983116261483701 RPM
+  Rise time: 1.8544410000000013 s
+  Settling time: 3.014182999999999 s
+  Oscillation duration: 0.3598739999999978 s (1 crossings)
+  Initial spike: 169.5135205769541 RPM/s
+  Correction spike: 0.0 RPM/s
+ PID Recommendation: Rise time is slow; increase Kp by ~10%.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 2001.4431617882321 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21917399999999887 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.05665800000000232 s (1 crossings)
+  Initial spike: 167.65912565713492 RPM/s
+  Correction spike: -222.92611690017918 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1597.3773438309545 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21878799999999998 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08040000000000092 s (1 crossings)
+  Initial spike: 175.7126712955085 RPM/s
+  Correction spike: -217.43248575286577 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1196.7813273954976 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21964000000000183 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.07943200000000061 s (1 crossings)
+  Initial spike: 178.56749049637043 RPM/s
+  Correction spike: -304.62641514089853 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 796.4582713469555 RPM
+  Overshoot: 0.4304225483617188 RPM
+  Rise time: 0.2188219999999994 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.06019500000000022 s (1 crossings)
+  Initial spike: 178.47577305870183 RPM/s
+  Correction spike: -217.56556629709615 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 395.9227059182367 RPM
+  Overshoot: 0.6949925659912404 RPM
+  Rise time: 0.2192140000000009 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.06012699999999782 s (1 crossings)
+  Initial spike: 174.11866149229658 RPM/s
+  Correction spike: -420.06596231774176 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: FAST_SPIKE_MAX
+  Target: 2000.0 RPM
+  Overshoot: 1.8985417273750045 RPM
+  Rise time: 0.3987340000000046 s
+  Settling time: 4.019228000000005 s
+  Oscillation duration: 0.24023400000000095 s (1 crossings)
+  Initial spike: 5448.441286922237 RPM/s
+  Correction spike: -1.1970815807267589E-11 RPM/s
+ PID Recommendation: Transient spike detected; reduce Kp slightly or add Kd to soften the initial response.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 2001.8799986703236 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21989500000000106 s
+  Settling time: 3.0195459999999983 s
+  Oscillation duration: 0.0 s (0 crossings)
+  Initial spike: 16.16420046600612 RPM/s
+  Correction spike: -1.0286768499286618 RPM/s
+ PID Recommendation: Settling time is long; increase Kp or add a bit more Kd.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1997.7764703536 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21926599999999752 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.07936299999999363 s (1 crossings)
+  Initial spike: 174.51793171484417 RPM/s
+  Correction spike: -211.78786464440134 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1597.36249402848 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.22012300000000096 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.07977400000000046 s (1 crossings)
+  Initial spike: 173.0793897460084 RPM/s
+  Correction spike: -215.55919270601242 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1196.80296586535 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.2002159999999975 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08068399999999798 s (1 crossings)
+  Initial spike: 163.31913507159118 RPM/s
+  Correction spike: -218.57346518858614 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 796.212028622819 RPM
+  Overshoot: 0.43042396759892654 RPM
+  Rise time: 0.20002700000000573 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08020299999999736 s (1 crossings)
+  Initial spike: 166.63796509263918 RPM/s
+  Correction spike: -218.41143020403862 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: RECOVER1_SPIKE_MAX
+  Target: 2000.0 RPM
+  Overshoot: 1.8985417273750045 RPM
+  Rise time: 0.3392470000000003 s
+  Settling time: 4.020404999999997 s
+  Oscillation duration: 0.281292999999998 s (1 crossings)
+  Initial spike: 5655.244709636057 RPM/s
+  Correction spike: -1.1834982065542119E-11 RPM/s
+ PID Recommendation: Transient spike detected; reduce Kp slightly or add Kd to soften the initial response.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 2001.8807144205548 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21879299999999802 s
+  Settling time: 3.0187469999999976 s
+  Oscillation duration: 0.0 s (0 crossings)
+  Initial spike: 15.841688734399067 RPM/s
+  Correction spike: -1.013316071439303 RPM/s
+ PID Recommendation: Settling time is long; increase Kp or add a bit more Kd.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1998.0371015648211 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.20037299999999902 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08056699999999495 s (1 crossings)
+  Initial spike: 161.05456305257687 RPM/s
+  Correction spike: -213.89350019587224 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1597.6500362748031 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21877699999999578 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.0805300000000031 s (1 crossings)
+  Initial spike: 170.58538538363294 RPM/s
+  Correction spike: -229.4573996680442 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1196.6675193529813 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.2005669999999924 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08067099999999527 s (1 crossings)
+  Initial spike: 170.0022478777201 RPM/s
+  Correction spike: -216.62469344324907 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 796.3136666975605 RPM
+  Overshoot: 0.4304234095897641 RPM
+  Rise time: 0.21952000000000282 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08028700000001265 s (1 crossings)
+  Initial spike: 177.45721247632875 RPM/s
+  Correction spike: -254.98756484950266 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: RECOVER2_SPIKE_4_5
+  Target: 1600.0 RPM
+  Overshoot: 1.3162462466266334 RPM
+  Rise time: 0.3004420000000039 s
+  Settling time: 4.000159999999994 s
+  Oscillation duration: 0.3401129999999881 s (1 crossings)
+  Initial spike: 5545.455483303583 RPM/s
+  Correction spike: -1.1896283966053472E-11 RPM/s
+ PID Recommendation: Transient spike detected; reduce Kp slightly or add Kd to soften the initial response.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1601.3034003413827 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21892200000000628 s
+  Settling time: 3.0189529999999962 s
+  Oscillation duration: 0.0 s (0 crossings)
+  Initial spike: 11.069390460667986 RPM/s
+  Correction spike: -0.7072362694797049 RPM/s
+ PID Recommendation: Settling time is long; increase Kp or add a bit more Kd.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1597.3442194047243 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.2008210000000048 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08058699999999419 s (1 crossings)
+  Initial spike: 164.71126140781953 RPM/s
+  Correction spike: -220.37040512320195 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1197.0217648348655 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21849500000000432 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08016999999999541 s (1 crossings)
+  Initial spike: 166.84837936315145 RPM/s
+  Correction spike: -260.795315384202 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 796.128546415258 RPM
+  Overshoot: 0.4303709410736474 RPM
+  Rise time: 0.2002209999999991 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.0794039999999967 s (1 crossings)
+  Initial spike: 169.32586904701301 RPM/s
+  Correction spike: -303.163020293468 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: RECOVER3_SPIKE_4_5_REPEAT
+  Target: 1600.0 RPM
+  Overshoot: 1.3162462466266334 RPM
+  Rise time: 0.2991630000000072 s
+  Settling time: 4.0191659999999985 s
+  Oscillation duration: 0.34041799999999967 s (1 crossings)
+  Initial spike: 5624.9796204245295 RPM/s
+  Correction spike: -1.1803648208644637E-11 RPM/s
+ PID Recommendation: Transient spike detected; reduce Kp slightly or add Kd to soften the initial response.
+ Feedforward Recommendation: Feedforward appears reasonable for this phase.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1601.3026316535745 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.219955000000013 s
+  Settling time: 3.0198820000000097 s
+  Oscillation duration: 0.0 s (0 crossings)
+  Initial spike: 11.64649597945127 RPM/s
+  Correction spike: -0.8852730495027316 RPM/s
+ PID Recommendation: Settling time is long; increase Kp or add a bit more Kd.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1597.3765253598265 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.20024200000000292 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.07940400000001091 s (1 crossings)
+  Initial spike: 165.106165698694 RPM/s
+  Correction spike: -214.13389332608972 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 1196.8059710570412 RPM
+  Overshoot: 0.0 RPM
+  Rise time: 0.21921700000000044 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.08051899999999534 s (1 crossings)
+  Initial spike: 171.64219145611406 RPM/s
+  Correction spike: -217.1825305892139 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 796.4255120178999 RPM
+  Overshoot: 0.43042193385878136 RPM
+  Rise time: 0.21999199999999064 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.06378599999999324 s (1 crossings)
+  Initial spike: 176.6614229927987 RPM/s
+  Correction spike: -211.68289656563454 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_DOWN_STEP
+  Target: 395.69095617185366 RPM
+  Overshoot: 0.6949960674157789 RPM
+  Rise time: 0.21916699999999878 s
+  Settling time: -1.0 s
+  Oscillation duration: 0.059739000000007536 s (1 crossings)
+  Initial spike: 173.9196565178439 RPM/s
+  Correction spike: -220.21225925494414 RPM/s
+ PID Recommendation: Response looks stable. PID values appear well-tuned.
+ Feedforward Recommendation: Feedforward not evaluated during slow-down phases.
+--------------------------------
+
+=== Final Summary ===
+Total Phases: 33
+Total Duration: 103.841269 s
+
+PID Values Used:
+  Kp: 0.013000000268220901
+  Ki: 0.0
+  Kd: 0.0
+
+Feedforward Values Used:
+  kV: 0.13529999554157257
+  kS: 0.0
+  kA: 0.0
+
+Overall Observations:
+  - Max RPM achieved: 0.0
+  - Max overshoot observed: 1.8985417273750045 RPM
+  - Average rise time: 0.4776939393939402 s
+  - Average settling time: 3.323953846153846 s
+  - Oscillation detected in 0 phases
+
+Overall PID Recommendation:
+  Rise time is slow; increase Kp by ~10%.
+
+Overall Feedforward Recommendation:
+ Feedforward appears reasonable; focus on PID tuning.
+
+=== End of Report ===

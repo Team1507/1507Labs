@@ -1,0 +1,41 @@
+=== Shooter PID + Feedforward Tuning Test Starting ===
+
+=== Shooter PID Phase Report ===
+Phase: SLOW_UP_STEP
+  Target: 400.0 RPM
+  CATASTROPHIC FAILURE: Shooter cannot reach target RPM.
+  Max RPM achieved: 117.33393585353781 RPM
+  Recommendation: Shooter reached only 29% of target. Suggested new kV = 0.1364 (current kV = 0.0400).
+  Feedforward Recommendation: Increase kV.
+--------------------------------
+
+=== TEST ABORTED EARLY DUE TO FAILURE ===
+=== Shooter PID Tuning Test Complete ===
+=== Final Summary ===
+Total Phases: 1
+Total Duration: 3.0661610000000006 s
+
+PID Values Used:
+  Kp: 0.0
+  Ki: 0.0
+  Kd: 0.0
+
+Feedforward Values Used:
+  kV: 0.03999999910593033
+  kS: 0.0
+  kA: 0.0
+
+Overall Observations:
+  - Max RPM achieved: 117.33393585353781
+  - Max overshoot observed: 0.0 RPM
+  - Average rise time: -1.0 s
+  - Average settling time: -1.0 s
+  - Oscillation detected in 0 phases
+
+Overall PID Recommendation:
+  Shooter reached only 29% of target. Suggested new kV = 0.1364 (current kV = 0.0400).
+
+Overall Feedforward Recommendation:
+ No feedforward recommendation available.
+
+=== End of Report ===
