@@ -11,6 +11,7 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.RobotBase;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 // Mechanics
@@ -433,6 +434,11 @@ public class ShooterSubsystem extends SubsystemBase {
      */
     @Override
     public void periodic() {
+
+        // Debug: see what the subsystem thinks it's doing 
+        SmartDashboard.putNumber("Shooter/Target/Motor (RPS)", ratio.toOutput(targetMotorRPS));
+        SmartDashboard.putNumber("Shooter/Target/Motor (RPM)", ratio.toOutput(targetMotorRPS * 60)); 
+        SmartDashboard.putNumber("Shooter/MeasuredRPM", getShooterRPM());
 
         if (RobotBase.isReal()) {
             shooterMotor.setControl(velocityRequest.withVelocity(targetMotorRPS));

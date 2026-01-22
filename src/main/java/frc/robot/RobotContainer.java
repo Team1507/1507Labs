@@ -16,6 +16,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 // Robot Commands
 import frc.robot.commands.CmdMoveRRT;
+import frc.robot.commands.CmdSetShooterRPM;
 import frc.robot.commands.CmdShooterPIDTuner;
 
 // Robot Subsystems
@@ -99,7 +100,9 @@ public class RobotContainer {
             shooterSubsystem.getShooterMotor(),
             poseSupplier,
             Hub.CENTER.getTranslation()
-        );    
+        );
+
+    private double shooterRPM;
 
     // -----------------------------
     // Autos
@@ -121,8 +124,8 @@ public class RobotContainer {
             Commands.run(
                 () -> {
                     // Build telemetry → ask model → set RPM
-                    shooterSubsystem.updateShooterFromModel();
-                    //shooterSubsystem.setTargetRPM(3800);
+                    //shooterSubsystem.updateShooterFromModel();
+                    shooterSubsystem.setTargetRPM(shooterRPM);
                 },
                 shooterSubsystem
             )
@@ -203,13 +206,15 @@ public class RobotContainer {
             Commands.runOnce(photonVisionSubsystem::resetDrivetrainToVisionPose)
         );
 
-        drivetrain.registerTelemetry(logger::telemeterize);
-
         // PID Tuner
         SmartDashboard.putData( 
             "Run Shooter PID Tuner",
             new CmdShooterPIDTuner(shooterSubsystem, MAX_RPM) // max RPM here
         );
+
+        SmartDashboard.putNumber("Shooter RPM", shooterRPM);
+
+        drivetrain.registerTelemetry(logger::telemeterize);
     }
 
     private void configureAutoChooser() {
@@ -236,5 +241,9 @@ public class RobotContainer {
 
     private double applyDeadband(double value, double deadband) {
         return (Math.abs(value) < deadband) ? 0.0 : value;
+    }
+
+    public void updateDashboardInputs(){
+        shooterRPM = SmartDashboard.getNumber("Shooter RPM", shooterRPM);
     }
 }

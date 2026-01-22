@@ -205,6 +205,25 @@ public class CmdShooterPIDTuner extends Command {
         double setpoint = computeSetpoint(t);
         shooter.setTargetRPM(setpoint);
 
+        // Only enforce overspeed protection during ramp-up phases
+        if (phase == Phase.SLOW_UP_STEP || 
+            phase == Phase.FAST_SPIKE_MAX || 
+            phase == Phase.RECOVER1_SPIKE_MAX || 
+            phase == Phase.RECOVER2_SPIKE_4_5 || 
+            phase == Phase.RECOVER3_SPIKE_4_5_REPEAT) {
+
+            if (shooter.getShooterRPM() > shooter.getTargetRPM() * 1.10) {
+                appendFailureReport(
+                    "Shooter exceeded safe RPM during ramp-up. " +
+                    "Target=" + shooter.getTargetRPM() +
+                    " RPM, Actual=" + shooter.getShooterRPM() +
+                    " RPM. Test aborted for safety."
+                );
+                phase = Phase.DONE;
+                return;
+            }
+        }
+
         samples.add(new Sample(
             t,
             setpoint,
@@ -550,6 +569,15 @@ public class CmdShooterPIDTuner extends Command {
                         recommendedKV,
                         currentKV
                     )
+                );
+                phase = Phase.DONE;
+                return;
+            }
+
+            if (fracCat > 1.20) {
+                appendFailureReport(
+                    "Shooter overshot to " + (int)(fracCat * 100) +
+                    "% of target. Reduce kV or kP to prevent excessive overshoot."
                 );
                 phase = Phase.DONE;
                 return;

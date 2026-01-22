@@ -5,6 +5,7 @@
 package frc.robot;
 
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
@@ -80,5 +81,7 @@ public class Robot extends TimedRobot {
     //SmartDashboard.putNumber("Quest Battery", m_robotContainer.questNavSubsystem.getBatteryPercent().getAsInt());
     //SmartDashboard.putBoolean("Quest Is Connected", m_robotContainer.questNavSubsystem.isConnected());
     //SmartDashboard.putBoolean("Quest Is Tracking", m_robotContainer.questNavSubsystem.isTracking());
+
+    m_robotContainer.updateDashboardInputs();
   }
 }
