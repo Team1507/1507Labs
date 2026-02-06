@@ -15,8 +15,8 @@ import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import java.util.*;
 
 // Robot Constants
-import static frc.robot.Constants.FieldElements.*;
-import static frc.robot.Constants.RobotGeometry.*;
+import static frc.robot.Constants.kFieldElements.*;
+import static frc.robot.Constants.kRobotGeometry.*;
 
 public class RRTGenerator {
 

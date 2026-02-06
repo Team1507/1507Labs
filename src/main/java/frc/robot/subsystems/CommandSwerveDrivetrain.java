@@ -297,4 +297,15 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     ) {
         super.addVisionMeasurement(visionRobotPoseMeters, Utils.fpgaToCurrentTime(timestampSeconds), visionMeasurementStdDevs);
     }
+
+    public void seedPoseFromVision(Pose2d visionPose) {
+        // Reset estimator pose (this sets x, y, and heading)
+        resetPose(visionPose);
+
+        // Align gyro to the same heading
+        getPigeon2().setYaw(visionPose.getRotation().getDegrees());
+    }
+    public Rotation2d getHeading() {
+        return getPigeon2().getRotation2d();
+    }
 }

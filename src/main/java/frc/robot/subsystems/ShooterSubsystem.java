@@ -24,8 +24,8 @@ import frc.robot.shooter.data.ShotRecord;
 import frc.robot.shooter.model.ShooterModel;
 
 // Constants
-import frc.robot.Constants.Shooter;
-import frc.robot.Constants.Shooter.Gains;
+import frc.robot.Constants.kShooter;
+import frc.robot.Constants.kShooter.Gains;
 
 /**
  * ShooterSubsystem provides a unified interface for controlling a flywheel‑based shooter.
@@ -243,7 +243,7 @@ public class ShooterSubsystem extends SubsystemBase {
     // ------------------------------------------------------------
 
     /**
-     * Applies PID and feedforward gains from {@link Shooter.Gains}
+     * Applies PID and feedforward gains from {@link kShooter.Gains}
      * to the TalonFX Slot0 configuration.
      */
     private void configurePID() {
@@ -454,11 +454,11 @@ public class ShooterSubsystem extends SubsystemBase {
         double motorRPS = ratio.toMotor(wheelRPS);
 
         // 1. Sensor filtering
-        double alphaSensor = dt / (Shooter.Sim.SENSOR_FILTER_TIME_CONSTANT + dt);
+        double alphaSensor = dt / (kShooter.Sim.SENSOR_FILTER_TIME_CONSTANT + dt);
         simMotorRpsMeasured += alphaSensor * (motorRPS - simMotorRpsMeasured);
 
         // 2. Command filtering
-        double alphaCommand = dt / (Shooter.Sim.COMMAND_FILTER_TIME_CONSTANT + dt);
+        double alphaCommand = dt / (kShooter.Sim.COMMAND_FILTER_TIME_CONSTANT + dt);
         simMotorRpsCommanded += alphaCommand * (targetMotorRPS - simMotorRpsCommanded);
 
         // 3. Phoenix-like control law
@@ -471,7 +471,7 @@ public class ShooterSubsystem extends SubsystemBase {
         double desiredVolts = ffVolts + ksVolts + fbVolts;
 
         // 4. Voltage slew rate limiting
-        double maxStep = Shooter.Sim.VOLTAGE_SLEW_RATE * dt;
+        double maxStep = kShooter.Sim.VOLTAGE_SLEW_RATE * dt;
         double delta = desiredVolts - simVoltage;
 
         if (delta > maxStep) delta = maxStep;
@@ -480,8 +480,8 @@ public class ShooterSubsystem extends SubsystemBase {
         simVoltage += delta;
 
         // Clamp to battery
-        simVoltage = Math.max(-Shooter.Sim.MAX_VOLTAGE,
-                              Math.min(Shooter.Sim.MAX_VOLTAGE, simVoltage));
+        simVoltage = Math.max(-kShooter.Sim.MAX_VOLTAGE,
+                              Math.min(kShooter.Sim.MAX_VOLTAGE, simVoltage));
 
         // 5. Step flywheel physics
         if (flywheel != null)

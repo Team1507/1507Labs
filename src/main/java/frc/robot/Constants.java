@@ -47,7 +47,7 @@ public final class Constants {
         SIM
     }
 
-    public static final class Speed {
+    public static final class kSpeed {
 
         // ------------------------------------------------------------
         // TELEOP SCALING (Driver Controls)
@@ -145,12 +145,12 @@ public final class Constants {
         }
     }
 
-    public static final class RobotGeometry {
+    public static final class kRobotGeometry {
         public static final double HALF_LENGTH_METERS = 0.35; // half of robot length
         public static final double HALF_WIDTH_METERS  = 0.35; // half of robot width
     }
     
-    public static final class IO {
+    public static final class kIO {
         // Controllers
         public static final int JOYSTICK_PORT = 0;
 
@@ -169,7 +169,7 @@ public final class Constants {
         );
     }
 
-    public static final class Shooter {
+    public static final class kShooter {
 
         // ============================================================
         // Hardware
@@ -253,7 +253,7 @@ public final class Constants {
         }
     }
 
-    public static final class Quest {
+    public static final class kQuest {
         public static final Transform2d ROBOT_TO_QUEST_TRANSFORM =
             new Transform2d(
                 Units.inchesToMeters(-2.274634152842048),
@@ -276,7 +276,55 @@ public final class Constants {
         );
     }
 
-    public static final class MoveToPose {
+    public static final class kVision{
+        // --- April Tags ---
+        public static AprilTagFieldLayout APRILTAG_LAYOUT =
+            AprilTagFieldLayout.loadField(AprilTagFields.kDefaultField);
+
+        // Basic filtering thresholds
+        public static double maxAmbiguity = 0.3;
+        public static double maxZError = 0.75;
+
+        // Standard deviation baselines, for 1 meter distance and 1 tag
+        // (Adjusted automatically based on distance and # of tags)
+        public static double linearStdDevBaseline = 0.02; // Meters
+        public static double angularStdDevBaseline = 0.06; // Radians
+
+        // Standard deviation multipliers for each camera
+        // (Adjust to trust some cameras more than others)
+        public static double[] cameraStdDevFactors =
+            new double[] {
+                1.0, // Camera 0
+                1.0 // Camera 1
+            };
+
+        // Multipliers to apply for MegaTag 2 observations
+        public static double linearStdDevMegatag2Factor = 0.5; // More stable than full 3D solve
+        public static double angularStdDevMegatag2Factor =
+            Double.POSITIVE_INFINITY; // No rotation data available
+
+        public static final class BLU {
+            // Photon Vision
+            public static final String NAME = "Bluecam";
+            public static final Transform3d ROBOT_TO_CAMERA =
+                new Transform3d(
+                    new Translation3d(-0.281, 0.296, 0.2413), // meters: forward, left, up
+                    new Rotation3d(0,Math.toRadians(10),Math.toRadians(60))     // radians: pitch, yaw, roll 
+                );
+        }
+
+        public static final class YEL {
+            // Photon Vision
+            public static final String NAME = "Yellowcam";
+            public static final Transform3d ROBOT_TO_CAMERA =
+                new Transform3d(
+                    new Translation3d(-0.2985, -0.276, 0.2413), // meters: forward, left, up
+                    new Rotation3d(0,Math.toRadians(10),Math.toRadians(205))     // radians: pitch, yaw, roll
+                );
+        }
+    }
+
+    public static final class kMoveToPose {
         // --- PID gains for X, Y, and rotation ---
         public static final double X_KP     = 1.0;
         public static final double X_KI     = 0.0;
@@ -306,10 +354,10 @@ public final class Constants {
         public static final Pose2d POSE_B = new Pose2d(3.0, 4.0, Rotation2d.fromDegrees(0));
     }
 
-    public static final class FieldElements {
+    public static final class kFieldElements {
         // --- April Tags ---
         public static final AprilTagFieldLayout APRILTAG_LAYOUT =
-            AprilTagFields.k2025ReefscapeAndyMark.loadAprilTagLayoutField();
+            AprilTagFields.k2026RebuiltWelded.loadAprilTagLayoutField();
 
         // --- Field ---
         public static final double FIELD_LENGTH = 16.54; // meters

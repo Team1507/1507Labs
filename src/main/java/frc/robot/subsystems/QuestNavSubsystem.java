@@ -16,7 +16,7 @@ import frc.robot.subsystems.quest.PoseFrame;
 import frc.robot.subsystems.quest.QuestNav;
 
 // Constants
-import static frc.robot.Constants.Quest.*;
+import static frc.robot.Constants.kQuest.*;
 
 /**
  * VisionSystem implementation for QuestNav.

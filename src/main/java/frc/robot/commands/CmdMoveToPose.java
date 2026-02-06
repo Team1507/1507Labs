@@ -11,8 +11,8 @@ import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 
 // Robot Constants
-import static frc.robot.Constants.MoveToPose.*;
-import static frc.robot.Constants.Speed.*;
+import static frc.robot.Constants.kMoveToPose.*;
+import static frc.robot.Constants.kSpeed.*;
 
 /**
  * Command that drives the robot to a target Pose2d (x, y, heading).

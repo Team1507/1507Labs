@@ -16,8 +16,8 @@ import frc.robot.subsystems.vision.VisionSystem;
 import frc.robot.utilities.Telemetry;
 
 // Robot Constants
-import static frc.robot.Constants.IO.*;
-import static frc.robot.Constants.FieldElements.*;
+import static frc.robot.Constants.kIO.*;
+import static frc.robot.Constants.kFieldElements.*;
 
 /**
  * VisionSystem implementation for PhotonVision.

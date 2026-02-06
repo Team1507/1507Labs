@@ -13,6 +13,7 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.apriltag.AprilTagFieldLayout.OriginPosition;
 
 // Robot Commands
 import frc.robot.commands.CmdMoveRRT;
@@ -21,13 +22,18 @@ import frc.robot.commands.CmdShooterPIDTuner;
 
 // Robot Subsystems
 import frc.robot.subsystems.CommandSwerveDrivetrain;
+import frc.robot.subsystems.PhotonVisionManagerSubsystem;
 import frc.robot.subsystems.PhotonVisionSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
+import frc.robot.subsystems.vision.Vision;
+import frc.robot.subsystems.vision.VisionIOPhotonVision;
 
 // Robot Constants
-import static frc.robot.Constants.IO.*;
-import static frc.robot.Constants.Speed.*;
-import static frc.robot.Constants.Shooter.*;
+import frc.robot.Constants.kVision;
+import static frc.robot.Constants.kIO.*;
+import static frc.robot.Constants.kSpeed.*;
+import static frc.robot.Constants.kShooter.*;
+import frc.robot.Constants.kShooter.Flywheel;
 
 // Shooter model imports
 import frc.robot.shooter.data.PoseSupplier;
@@ -39,15 +45,15 @@ import frc.robot.shooter.model.ShooterModel;
 import frc.robot.navigation.Nodes.Hub;
 import frc.robot.navigation.Nodes.AllianceZoneBlue;
 //import frc.robot.navigation.Nodes.AllianceZoneRed;
-import frc.robot.Constants.Shooter.Flywheel;
+
 // Autos
 import frc.robot.auto.routines.OnePieceAuto;
 
 // Robot Extra
+import frc.robot.utilities.Telemetry;
 import frc.robot.generated.TunerConstants;
 import frc.robot.mechanics.FlywheelModel;
 import frc.robot.mechanics.GearRatio;
-import frc.robot.utilities.Telemetry;
 import frc.robot.sim.FuelSimulator;
 
 public class RobotContainer {
@@ -59,9 +65,6 @@ public class RobotContainer {
     private final CommandXboxController joystick = new CommandXboxController(JOYSTICK_PORT);
 
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
-
-    public final PhotonVisionSubsystem photonVisionSubsystem =
-        new PhotonVisionSubsystem(drivetrain, logger, "Limelight_2");
 
     // -----------------------------
     // Shooter + Model
@@ -108,11 +111,36 @@ public class RobotContainer {
     // Autos
     // -----------------------------
     private final SendableChooser<Command> autoChooser = new SendableChooser<>();
+    
+    // -----------------------------
+    // Cameras
+    // -----------------------------
+/* 
+    public final PhotonVisionManagerSubsystem photonVision =
+        new PhotonVisionManagerSubsystem(
+            drivetrain,
+            logger,
+            new PhotonVisionManagerSubsystem.CameraConfig(kVision.BLU.NANME, kVision.BLU.ROBOT_TO_CAMERA),
+            new PhotonVisionManagerSubsystem.CameraConfig(kVision.YEL.NANME, kVision.YEL.ROBOT_TO_CAMERA)
+        );
+ */
 
-    public RobotContainer() {
-        configureBindings();
-        configureShooterDefault();
-        configureAutoChooser();
+    public final Vision PVManager =
+        new Vision(
+            drivetrain::addVisionMeasurement,
+            drivetrain::getHeading,          // Supplier<Rotation2d>
+            drivetrain::seedPoseFromVision,
+            new VisionIOPhotonVision(kVision.BLU.NAME, kVision.BLU.ROBOT_TO_CAMERA),
+            new VisionIOPhotonVision(kVision.YEL.NAME, kVision.YEL.ROBOT_TO_CAMERA));
+
+    /** Robot Constructor */
+    public RobotContainer() { 
+        configureTelemetry();
+        configureDefaultCommands();
+        configureDriverControls();
+        configureVision();
+        configureAutos();
+        configureDashboard();
     }
 
     /**
@@ -132,10 +160,7 @@ public class RobotContainer {
         );
     }
 
-    /**
-     * Configures operator controls.
-     */
-    private void configureBindings() {
+    private void configureDefaultCommands() {
 
         drivetrain.setDefaultCommand(
             drivetrain.applyRequest(() -> {
@@ -153,71 +178,83 @@ public class RobotContainer {
             })
         );
 
-        // SysId routines
+        shooterSubsystem.setDefaultCommand(
+            Commands.run(
+                () -> shooterSubsystem.setTargetRPM(shooterRPM),
+                shooterSubsystem
+            )
+        );
+    }
+
+    private void configureDriverControls() {
+
+        // SysId
         joystick.back().and(joystick.y())
             .whileTrue(drivetrain.sysIdDynamic(Direction.kForward));
         joystick.back().and(joystick.x())
             .whileTrue(drivetrain.sysIdDynamic(Direction.kReverse));
+
         joystick.start().and(joystick.y())
             .whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
         joystick.start().and(joystick.x())
             .whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
-        // reset the field-centric heading
+        // Field-centric reset
         joystick.leftBumper()
             .onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
 
-        // Motion
-        joystick.a().onTrue(new CmdMoveRRT(drivetrain, Hub.APPROACH_FRONT));
+        // Motion commands
+        joystick.a()
+            .onTrue(new CmdMoveRRT(drivetrain, Hub.APPROACH_FRONT));
 
-        joystick.b().onTrue(drivetrain.runOnce(() -> {
-            CommandScheduler.getInstance().cancelAll();
-        }));
+        joystick.b()
+            .onTrue(Commands.runOnce(CommandScheduler.getInstance()::cancelAll));
 
-        // Shooter Target Update
-        // Right bumper → shoot at HUB_POSE
-        joystick.rightBumper().onTrue(
-            Commands.runOnce(() -> shooterSubsystem.setTargetPose(Hub.APPROACH_FRONT))
-        );
+        // Shooter targeting
+        joystick.rightBumper()
+            .onTrue(Commands.runOnce(() ->
+                shooterSubsystem.setTargetPose(Hub.APPROACH_FRONT)));
 
-        // Right trigger → shoot at SHOT_A_POSE
-        joystick.rightTrigger().onTrue(
-            Commands.runOnce(() -> shooterSubsystem.setTargetPose(AllianceZoneBlue.LEFT))
-        );
+        joystick.rightTrigger()
+            .onTrue(Commands.runOnce(() ->
+                shooterSubsystem.setTargetPose(AllianceZoneBlue.LEFT)));
 
-        // Left trigger → shoot at SHOT_B_POSE
-        joystick.leftTrigger().onTrue(
-            Commands.runOnce(() -> shooterSubsystem.setTargetPose(AllianceZoneBlue.RIGHT))
-        );
+        joystick.leftTrigger()
+            .onTrue(Commands.runOnce(() ->
+                shooterSubsystem.setTargetPose(AllianceZoneBlue.RIGHT)));
 
-        // Shooter sim visualization
-        joystick.rightBumper().onTrue(
-            new FuelSimulator(shooterSubsystem, poseSupplier, shotTrainer, Hub.APPROACH_FRONT.getTranslation())
-        );
-        joystick.rightTrigger().onTrue(
-            new FuelSimulator(shooterSubsystem, poseSupplier, shotTrainer, AllianceZoneBlue.LEFT.getTranslation())
-        );
-        joystick.leftTrigger().onTrue(
-            new FuelSimulator(shooterSubsystem, poseSupplier, shotTrainer, AllianceZoneBlue.RIGHT.getTranslation())
-        );
+        // Simulation visualization
+        joystick.rightBumper()
+            .onTrue(new FuelSimulator(
+                shooterSubsystem, poseSupplier, shotTrainer,
+                Hub.APPROACH_FRONT.getTranslation()));
 
-        // Vision pose reset
-        joystick.y().onTrue(
-            Commands.runOnce(photonVisionSubsystem::resetDrivetrainToVisionPose)
-        );
+        joystick.rightTrigger()
+            .onTrue(new FuelSimulator(
+                shooterSubsystem, poseSupplier, shotTrainer,
+                AllianceZoneBlue.LEFT.getTranslation()));
 
-        // PID Tuner
-        SmartDashboard.putData( 
-            "Run Shooter PID Tuner",
-            new CmdShooterPIDTuner(shooterSubsystem, MAX_RPM) // max RPM here
-        );
+        joystick.leftTrigger()
+            .onTrue(new FuelSimulator(
+                shooterSubsystem, poseSupplier, shotTrainer,
+                AllianceZoneBlue.RIGHT.getTranslation()));
+    }
 
-        SmartDashboard.putNumber("Shooter RPM", shooterRPM);
+    private void configureVision() {
+        // Nothing to bind yet — vision runs autonomously
+        // Future: buttons for resetVisionSeeding(), debug toggles, etc.
+    }
+
+    private void configureTelemetry() {
+        logger.registerVisionPoseSource("PhotonVisionManager");
+        logger.registerVisionPoseSource("Photon-BLU");
+        logger.registerVisionPoseSource("Photon-YEL");
 
         drivetrain.registerTelemetry(logger::telemeterize);
     }
 
-    private void configureAutoChooser() {
+
+    private void configureAutos() {
 
         // Default auto
         autoChooser.setDefaultOption(
@@ -243,7 +280,30 @@ public class RobotContainer {
         return (Math.abs(value) < deadband) ? 0.0 : value;
     }
 
-    public void updateDashboardInputs(){
+    private void configureDashboard() {
+
+        // Commands / buttons
+        SmartDashboard.putData(
+            "Run Shooter PID Tuner",
+            new CmdShooterPIDTuner(shooterSubsystem, MAX_RPM)
+        );
+
+        // Operator‑editable inputs (initial value only)
+        SmartDashboard.putNumber("Shooter RPM", shooterRPM);
+
+        // Choosers, static widgets, etc.
+        SmartDashboard.putData("Auto Mode", autoChooser);
+    }
+
+    public void updateDashboardInputs() {
+
+        // Read operator input
         shooterRPM = SmartDashboard.getNumber("Shooter RPM", shooterRPM);
+
+        // Publish live telemetry
+        SmartDashboard.putNumber(
+            "Pigeon heading",
+            drivetrain.getPigeon2().getRotation2d().getDegrees()
+        );
     }
 }

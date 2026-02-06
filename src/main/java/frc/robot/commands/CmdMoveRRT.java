@@ -18,8 +18,8 @@ import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.utilities.RRTGenerator;
 
 // Robot Constants
-import static frc.robot.Constants.MoveToPose.*;
-import static frc.robot.Constants.Speed.*;
+import static frc.robot.Constants.kMoveToPose.*;
+import static frc.robot.Constants.kSpeed.*;
 
 /**
  * Command that drives the robot along a generated trajectory
