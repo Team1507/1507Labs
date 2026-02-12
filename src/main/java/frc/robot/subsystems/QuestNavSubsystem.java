@@ -6,17 +6,15 @@ import java.util.OptionalInt;
 // WPI libraries
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
-
-// Vision base class
-import frc.robot.subsystems.vision.VisionSystem;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 // Robot Utilities
-import frc.robot.utilities.Telemetry;
 import frc.robot.subsystems.quest.PoseFrame;
 import frc.robot.subsystems.quest.QuestNav;
 
 // Constants
-import static frc.robot.Constants.kQuest.*;
+import frc.robot.Constants.kQuest;
 
 /**
  * VisionSystem implementation for QuestNav.
@@ -27,50 +25,51 @@ import static frc.robot.Constants.kQuest.*;
  *  - Updating latestPose for the VisionSystem base class
  *  - Providing QuestNav-specific utilities (battery %, timestamps, etc.)
  */
-public class QuestNavSubsystem extends VisionSystem {
+public class QuestNavSubsystem extends SubsystemBase{
+
+    public final CommandSwerveDrivetrain drivetrain;
+
+    public QuestNavSubsystem(CommandSwerveDrivetrain drivetrain) {
+        this.drivetrain = drivetrain;
+    }
 
     private final QuestNav questNav = new QuestNav();
-
-    public QuestNavSubsystem(CommandSwerveDrivetrain drivetrain, Telemetry logger) {
-        super(drivetrain, logger);
-    }
 
     /**
      * Updates the latest pose from QuestNav.
      * Called automatically by VisionSystem.periodic().
      */
     @Override
-    protected void update() {
-        // If QuestNav is not tracking, clear pose and exit
-        if (!questNav.isTracking()) {
-            latestPose = new Pose2d();
-            return;
-        }
-
-        // Get all unread frames
+    public void periodic() {
+        // Get the latest pose data frames from the Quest
         PoseFrame[] questFrames = questNav.getAllUnreadPoseFrames();
-        if (questFrames.length == 0) return;
 
-        // Use the most recent frame
-        PoseFrame questFrame = questFrames[questFrames.length - 1];
-        Pose3d questPose = questFrame.questPose3d();
+        // Loop over the pose data frames and send them to the pose estimator
+        for (PoseFrame questFrame : questFrames) {
+            // Make sure the Quest was tracking the pose for this frame
+            if (questFrame.isTracking()) {
+                // Get the pose of the Quest
+                Pose3d questPose = questFrame.questPose3d();
+                // Get timestamp for when the data was sent
+                double timestamp = questFrame.dataTimestamp();
 
-        // Transform QuestNav pose into robot coordinate space
-        Pose3d robotPose = questPose.transformBy(ROBOT_TO_QUEST.inverse());
-        latestPose = robotPose.toPose2d();
+                // Transform by the mount pose to get your robot pose
+                Pose3d robotPose = questPose.transformBy(kQuest.ROBOT_TO_QUEST.inverse());
 
-        // Fuse QuestNav into drivetrain estimator:
-        // drivetrain.addVisionMeasurement(latestPose, questFrame.dataTimestamp(), QUESTNAV_STD_DEVS);
-    }
-    
-    public void addVisionMeasurementToDrivetrain() {
-        getLatestPose().ifPresent(pose -> {
-            drivetrain.addVisionMeasurement(
-                pose,
-                getLastPoseTimestamp(),
-                QUESTNAV_STD_DEVS
-            );
-        });
+                // You can put some sort of filtering here if you would like!
+
+                Rotation2d pigeonHeading = drivetrain.getHeading(); // however you access it
+
+                Pose2d correctedPose = new Pose2d(
+                    robotPose.getX(),
+                    robotPose.getY(),
+                    pigeonHeading
+                );
+
+                // Add the measurement to our estimator
+                drivetrain.addVisionMeasurement(correctedPose, timestamp, kQuest.QUESTNAV_STD_DEVS);
+            }
+        }
     }
 
     // -------------------------

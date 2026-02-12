@@ -20,14 +20,15 @@ import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.ProtobufPublisher;
 import edu.wpi.first.networktables.ProtobufSubscriber;
 import edu.wpi.first.networktables.PubSubOption;
+import edu.wpi.first.networktables.StringSubscriber;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
-import frc.robot.generated.Commands;
-import frc.robot.generated.Data;
-import frc.robot.protos.wpilib.CommandProto;
-import frc.robot.protos.wpilib.CommandResponseProto;
-import frc.robot.protos.wpilib.DeviceDataProto;
-import frc.robot.protos.wpilib.FrameDataProto;
+import gg.questnav.questnav.protos.generated.Commands;
+import gg.questnav.questnav.protos.generated.Data;
+import gg.questnav.questnav.protos.wpilib.CommandProto;
+import gg.questnav.questnav.protos.wpilib.CommandResponseProto;
+import gg.questnav.questnav.protos.wpilib.DeviceDataProto;
+import gg.questnav.questnav.protos.wpilib.FrameDataProto;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
@@ -112,6 +113,11 @@ import java.util.OptionalInt;
  */
 public class QuestNav {
 
+  /**
+   * Interval at which to check and log if the QuestNavLib version matches the QuestNav app version
+   */
+  private static final double VERSION_CHECK_INTERVAL_SECONDS = 5.0;
+
   /** NetworkTable instance used for communication */
   private final NetworkTableInstance nt4Instance = NetworkTableInstance.getDefault();
 
@@ -159,6 +165,10 @@ public class QuestNav {
           .getProtobufTopic("deviceData", deviceDataProto)
           .subscribe(Data.ProtobufQuestNavDeviceData.newInstance());
 
+  /** Subscriber for QuestNav app version */
+  private final StringSubscriber versionSubscriber =
+      questNavTable.getStringTopic("version").subscribe("unknown");
+
   /** Publisher for command requests */
   private final ProtobufPublisher<Commands.ProtobufQuestNavCommand> requestPublisher =
       questNavTable.getProtobufTopic("request", commandProto).publish();
@@ -176,6 +186,12 @@ public class QuestNav {
 
   /** Last sent request id */
   private int lastSentRequestId = 0; // Should be the same on the backend
+
+  /** True to check for QuestNavLib and QuestNav version match at an interval */
+  private boolean versionCheckEnabled = true;
+
+  /** The last time QuestNavLib and QuestNav were checked for a match */
+  private double lastVersionCheckTime = 0.0;
 
   /**
    * Creates a new QuestNav instance for communicating with a Quest headset.
@@ -195,6 +211,54 @@ public class QuestNav {
    * </ul>
    */
   public QuestNav() {}
+
+  /**
+   * Checks the version of QuestNavLib and compares it to the version of QuestNav on the headset. If
+   * the headset is connected and the versions don't match, a warning will be sent to the
+   * driverstation at an interval.
+   *
+   * @see #VERSION_CHECK_INTERVAL_SECONDS
+   * @see #getLibVersion()
+   * @see #getQuestNavVersion()
+   */
+  private void checkVersionMatch() {
+    if (!versionCheckEnabled || !isConnected()) {
+      // Check is disabled or no QuestNav is connected
+      return;
+    }
+
+    // Check that the interval has passed, so we don't flood the DS with warnings
+    var currentTime = Timer.getTimestamp();
+    if ((currentTime - lastVersionCheckTime) < VERSION_CHECK_INTERVAL_SECONDS) {
+      return;
+    }
+    lastVersionCheckTime = currentTime;
+
+    // Retreive the version info
+    var libVersion = getLibVersion();
+    var questNavVersion = getQuestNavVersion();
+
+    // Check if the versions match
+    if (!questNavVersion.equals(libVersion)) {
+      String warningMessage =
+          String.format(
+              "WARNING FROM QUESTNAV: QuestNavLib version (%s) on your robot does not match QuestNav app version (%s) on your headset. "
+                  + "This may cause compatibility issues. Check the version of your vendordep and the app running on your headset.",
+              libVersion, questNavVersion);
+
+      DriverStation.reportWarning(warningMessage, false);
+    }
+  }
+
+  /**
+   * Turns the version check on or off. When on, a warning will be reported to the DriverStation if
+   * the QuestNavLib and QuestNav app versions do not match.
+   *
+   * @param enabled true to enable version checking, false to disable it. Default is true.
+   */
+  public void setVersionCheckEnabled(boolean enabled) {
+    this.versionCheckEnabled = enabled;
+  }
 
   /**
    * Sets the field-relative pose of the Quest headset by commanding it to reset its tracking.
@@ -287,48 +351,6 @@ public class QuestNav {
   }
 
   /**
-   * Gets the current tracking state of the Quest headset.
-   *
-   * <p>This method indicates whether the Quest's visual-inertial tracking system is currently
-   * functioning and providing reliable pose data. Tracking can be lost due to:
-   *
-   * <ul>
-   *   <li>Poor lighting conditions (too dark or too bright)
-   *   <li>Lack of visual features in the environment
-   *   <li>Rapid motion or high acceleration
-   *   <li>Camera occlusion or obstruction
-   *   <li>Hardware issues or overheating
-   * </ul>
-   *
-   * <p><strong>Important:</strong> When tracking is lost, pose data becomes unreliable and should
-   * not be used for robot control. Implement fallback localization methods (wheel odometry, vision,
-   * etc.) for when Quest tracking is unavailable.
-   *
-   * <p>To recover tracking:
-   *
-   * <ul>
-   *   <li>Improve lighting conditions
-   *   <li>Move to an area with more visual features
-   *   <li>Reduce robot motion to allow re-initialization
-   *   <li>Clear any obstructions from Quest cameras
-   *   <li>Call {@link #setPose(Pose3d)} once tracking recovers
-   * </ul>
-   *
-   * @return {@code true} if the Quest is actively tracking and pose data is reliable, {@code false}
-   *     if tracking is lost or no device data is available
-   * @see #isConnected()
-   * @see #getTrackingLostCounter()
-   * @see #getAllUnreadPoseFrames()
-   */
-  public boolean isTracking() {
-    Data.ProtobufQuestNavDeviceData latestDeviceData = deviceDataSubscriber.get();
-    if (latestDeviceData != null) {
-      return latestDeviceData.getCurrentlyTracking();
-    }
-    return false; // Return false if no data for failsafe
-  }
-
-  /**
    * Gets the current frame count from the Quest headset.
    *
    * @return The frame count value
@@ -410,6 +432,48 @@ public class QuestNav {
   }
 
   /**
+   * Gets the current tracking state of the Quest headset.
+   *
+   * <p>This method indicates whether the Quest's visual-inertial tracking system is currently
+   * functioning and providing reliable pose data. Tracking can be lost due to:
+   *
+   * <ul>
+   *   <li>Poor lighting conditions (too dark or too bright)
+   *   <li>Lack of visual features in the environment
+   *   <li>Rapid motion or high acceleration
+   *   <li>Camera occlusion or obstruction
+   *   <li>Hardware issues or overheating
+   * </ul>
+   *
+   * <p><strong>Important:</strong> When tracking is lost, pose data becomes unreliable and should
+   * not be used for robot control. Implement fallback localization methods (wheel odometry, vision,
+   * etc.) for when Quest tracking is unavailable.
+   *
+   * <p>To recover tracking:
+   *
+   * <ul>
+   *   <li>Improve lighting conditions
+   *   <li>Move to an area with more visual features
+   *   <li>Reduce robot motion to allow re-initialization
+   *   <li>Clear any obstructions from Quest cameras
+   *   <li>Call {@link #setPose(Pose3d)} once tracking recovers
+   * </ul>
+   *
+   * @return {@code true} if the Quest is actively tracking and pose data is reliable, {@code false}
+   *     if tracking is lost or no device data is available
+   * @see #isConnected()
+   * @see #getTrackingLostCounter()
+   * @see #getAllUnreadPoseFrames()
+   */
+  public boolean isTracking() {
+    var frameData = frameDataSubscriber.get();
+    if (frameData != null) {
+      return frameData.getIsTracking();
+    }
+    return false; // Return false if no data for failsafe
+  }
+
+  /**
    * Retrieves all new pose frames received from the Quest since the last call to this method.
    *
    * <p>This is the primary method for integrating QuestNav with FRC pose estimation systems. It
@@ -471,7 +535,8 @@ public class QuestNav {
               pose3dProto.unpack(frameData.value.getPose3D()),
               Microseconds.of(frameData.serverTime).in(Seconds),
               frameData.value.getTimestamp(),
-              frameData.value.getFrameCount());
+              frameData.value.getFrameCount(),
+              frameData.value.getIsTracking());
     }
     return result;
   }
@@ -519,6 +584,7 @@ public class QuestNav {
    * @see edu.wpi.first.wpilibj.DriverStation#reportError(String, boolean)
    */
   public void commandPeriodic() {
+    checkVersionMatch();
     Commands.ProtobufQuestNavCommandResponse[] responses = responseSubscriber.readQueueValues();
 
     for (Commands.ProtobufQuestNavCommandResponse response : responses) {
@@ -526,5 +592,23 @@ public class QuestNav {
         DriverStation.reportError("QuestNav command failed!\n" + response.getErrorMessage(), false);
       }
     }
+  }
+
+  /**
+   * Retrieves the QuestNav-lib version number.
+   *
+   * @return The version number as a String.
+   */
+  public String getLibVersion() {
+    return BuildConfig.APP_VERSION;
+  }
+
+  /**
+   * Retrieves the QuestNav app version running on the Quest headset.
+   *
+   * @return The version number as a String, or "unknown" if unable to retrieve.
+   */
+  public String getQuestNavVersion() {
+    return versionSubscriber.get();
   }
 }

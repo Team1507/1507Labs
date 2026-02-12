@@ -9,7 +9,7 @@
 package frc.robot.protos.wpilib;
 
 import edu.wpi.first.util.protobuf.Protobuf;
-import frc.robot.generated.Data;
+import gg.questnav.questnav.protos.generated.Data;
 import us.hebi.quickbuf.Descriptors;
 
 /** WPILib Protobuf layer for FrameData Protobuf */

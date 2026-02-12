@@ -44,12 +44,12 @@ public class CmdNavigateWithQuestNav extends Command {
     @Override
     public void initialize() {
         // 1. Get current pose from QuestNav (absolute field position)
-        Pose2d currentPose = questNav.getLatestPose().orElse(drivetrain.getState().Pose);
+        //Pose2d currentPose = questNav.getLatestPose().orElse(drivetrain.getState().Pose);
 
         // 2. Generate trajectory from currentPose → targetPose
         //    (In practice, you’d use WPILib TrajectoryGenerator or PathPlannerLib,
         //     possibly with waypoints to avoid obstacles.)
-        trajectory = TrajectoryFactory.generateTrajectory(currentPose, targetPose);
+        //trajectory = TrajectoryFactory.generateTrajectory(currentPose, targetPose);
     }
 
     @Override
@@ -59,14 +59,14 @@ public class CmdNavigateWithQuestNav extends Command {
         var desiredState = trajectory.sample(elapsed);
 
         // 4. Get current pose from QuestNav
-        Pose2d currentPose = questNav.getLatestPose().orElse(drivetrain.getState().Pose);
+        //Pose2d currentPose = questNav.getLatestPose().orElse(drivetrain.getState().Pose);
 
         // 5. Calculate chassis speeds to follow trajectory
-        var speeds = controller.calculate(currentPose, desiredState, targetPose.getRotation());
+        //var speeds = controller.calculate(currentPose, desiredState, targetPose.getRotation());
 
         // 6. Send speeds to drivetrain (via CTRE ApplyRobotSpeeds)
-        drivetrain.setControl(new com.ctre.phoenix6.swerve.SwerveRequest.ApplyRobotSpeeds()
-            .withSpeeds(speeds));
+        //drivetrain.setControl(new com.ctre.phoenix6.swerve.SwerveRequest.ApplyRobotSpeeds()
+        //    .withSpeeds(speeds));
     }
 
     @Override

@@ -13,17 +13,16 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.apriltag.AprilTagFieldLayout.OriginPosition;
 
 // Robot Commands
 import frc.robot.commands.CmdMoveRRT;
 import frc.robot.commands.CmdSetShooterRPM;
 import frc.robot.commands.CmdShooterPIDTuner;
+import frc.robot.commands.CmdMaintainHeadingToTarget;
 
 // Robot Subsystems
 import frc.robot.subsystems.CommandSwerveDrivetrain;
-import frc.robot.subsystems.PhotonVisionManagerSubsystem;
-import frc.robot.subsystems.PhotonVisionSubsystem;
+import frc.robot.subsystems.QuestNavSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
@@ -133,6 +132,8 @@ public class RobotContainer {
             new VisionIOPhotonVision(kVision.BLU.NAME, kVision.BLU.ROBOT_TO_CAMERA),
             new VisionIOPhotonVision(kVision.YEL.NAME, kVision.YEL.ROBOT_TO_CAMERA));
 
+    public final QuestNavSubsystem quest = new QuestNavSubsystem(drivetrain);
+
     /** Robot Constructor */
     public RobotContainer() { 
         configureTelemetry();
@@ -199,9 +200,16 @@ public class RobotContainer {
         joystick.start().and(joystick.x())
             .whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
-        // Field-centric reset
         joystick.leftBumper()
-            .onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
+            .whileTrue(
+                new CmdMaintainHeadingToTarget(
+                    drivetrain,
+                    () -> shooterSubsystem.getTargetPose(), // or Hub.CENTER, etc.
+                    () -> applyDeadband(-joystick.getLeftY(), 0.15) * getTranslationScale() * getMaxSpeed(),
+                    () -> applyDeadband(-joystick.getLeftX(), 0.15) * getTranslationScale() * getMaxSpeed()
+                )
+            );
+
 
         // Motion commands
         joystick.a()
@@ -293,6 +301,10 @@ public class RobotContainer {
 
         // Choosers, static widgets, etc.
         SmartDashboard.putData("Auto Mode", autoChooser);
+
+        SmartDashboard.putBoolean("QuestNav/is Connected", quest.isConnected());
+        //SmartDashboard.putBoolean("QuestNav/is Tracking", quest.isTracking());
+        SmartDashboard.putNumber("QuestNav/Battery Percent", quest.getBatteryPercent().getAsInt());
     }
 
     public void updateDashboardInputs() {

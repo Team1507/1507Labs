@@ -256,8 +256,8 @@ public final class Constants {
     public static final class kQuest {
         public static final Transform2d ROBOT_TO_QUEST_TRANSFORM =
             new Transform2d(
-                Units.inchesToMeters(-2.274634152842048),
-                Units.inchesToMeters(7.481121673003204),
+                -0.381,
+                0.0,
                 Rotation2d.kCCW_90deg);
 
         public static final Matrix<N3, N1> STD_DEVS = VecBuilder.fill(0, 0, 0);
@@ -266,13 +266,13 @@ public final class Constants {
         
         // Mount transform: robot origin -> QuestNav sensor
         public static final Transform3d ROBOT_TO_QUEST =
-            new Transform3d(0.381, 0.0, 0.3048, new Rotation3d(0.0, 0.0, 0.0));
+            new Transform3d(-0.381, 0.0, 0.3048, new Rotation3d(0.0, 0.0, -180.0));
 
         // Standard deviations for measurement trust
         public static final Matrix<N3, N1> QUESTNAV_STD_DEVS = VecBuilder.fill(
-            0.02,  // 2 cm X
-            0.02,  // 2 cm Y
-            0.035  // ~2 degrees
+            0.2,
+            0.2,
+            0.05
         );
     }
 

@@ -9,7 +9,7 @@
 package frc.robot.protos.wpilib;
 
 import edu.wpi.first.util.protobuf.Protobuf;
-import frc.robot.generated.Commands;
+import gg.questnav.questnav.protos.generated.Commands;
 import us.hebi.quickbuf.Descriptors;
 
 /**
