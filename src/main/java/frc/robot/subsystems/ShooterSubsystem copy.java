@@ -14,7 +14,6 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.Timer;
-import frc.lib.core.framework.base.Subsystems1507;
 import frc.lib.core.logging.Telemetry;
 import frc.lib.core.math.GearRatio;
 import frc.lib.core.shooterML.ShooterTelemetryProvider;
@@ -24,6 +23,7 @@ import frc.lib.core.shooterML.model.ShooterModel;
 import frc.lib.io.shooter.ShooterIO;
 import frc.lib.io.shooter.ShooterIOSim;
 import frc.lib.io.shooter.ShooterInputs;
+import frc.robot.framework.base.Subsystems1507;
 
 /**
  * High‑level shooter subsystem using the IO architecture.

@@ -1,0 +1,243 @@
+================================================================================
+  1507Labs — Experiments & Features Overview
+  Compiled from wiki pages at: C:\Users\KellyTopolski\Documents\1507\1507Labs.wiki
+================================================================================
+
+This file summarizes all major experiments and modules that were developed in
+1507Labs. Use this as the reference list for deciding what to bring back into
+the new 1507Base codebase.
+
+--------------------------------------------------------------------------------
+1. SHOOTER PID TUNER
+--------------------------------------------------------------------------------
+A fully automated, telemetry-driven PID tuning system for shooter subsystems.
+
+What it does:
+  - Runs the shooter through a deterministic sequence of controlled phases:
+      * Ramp-Up Steps (gradually increasing RPM)
+      * Ramp-Down Steps (gradually decreasing RPM)
+      * Spike Tests (instant jump to max RPM)
+      * Recovery Cycles (repeated transient response tests)
+  - Records setpoint, measured RPM, applied voltage, error, and timing
+  - Analyzes overshoot, rise time, settling time, and oscillation
+  - Generates a timestamped text report with per-phase and overall PID
+    recommendations
+
+Key value: Replaces guesswork with a repeatable, measurable engineering process.
+Useful when: New shooter installed, motors/gear ratios changed, pre-competition
+validation, or teaching students PID concepts.
+
+Wiki pages: Shooter-PID-Tuner, Shooter-PID-Tuner-Quick-Start,
+            Shooter-PID-Tuner-Technical-Report, Shooter-PID-Tuner-Report-Guide,
+            Shooter-PID-Tuner-Integration, Shooter-PID-Tuner-Troubleshooting
+
+--------------------------------------------------------------------------------
+2. RRT PATH GENERATOR
+--------------------------------------------------------------------------------
+A real-time, obstacle-aware path planner using a hybrid RRT / RRT* algorithm.
+
+What it does:
+  - Plans paths LIVE during teleop or autonomous (no pre-baked trajectories)
+  - Samples random points, builds a tree, connects to the goal
+  - Runs an RRT* rewiring pass to shorten/smooth the path
+  - Outputs a WPILib Trajectory ready to follow with swerve PID controllers
+  - Falls back to a straight-line trajectory if no valid path is found
+  - Field-agnostic: obstacles are defined as polygons (Reef, Hub, walls, etc.)
+
+Key value: Dynamic rerouting and obstacle avoidance without PathPlanner files.
+Useful when: Multi-step autos, vision-adjusted movement, complex field layouts,
+or when the robot starts off-path.
+
+Wiki pages: RRT-Overview, RRT-Generating-Paths, RRT-Visualization,
+            RRT-Autonomous-Integration, RRT-Advanced, Nodes-RRT
+
+--------------------------------------------------------------------------------
+3. QUESTNAV (Meta Quest VR Localization)
+--------------------------------------------------------------------------------
+A navigation and localization framework that uses a Meta Quest headset as a
+SLAM-based pose sensor, fused with odometry via the shared VisionSystem layer.
+
+What it does:
+  - Reads timestamped 3D pose frames from the Quest device over USB/network
+  - Transforms Quest coordinate space → robot field-relative coordinates
+  - Feeds poses into the drivetrain's SwerveDrivePoseEstimator
+  - Implements the same VisionSystem base class as PhotonVision, so both sources
+    can be fused consistently
+  - Tracks connection state, battery, and frame freshness
+
+Architecture layers:
+  QuestIOReal (hardware) → QuestNav (runtime) → QuestNavSubsystem (robot layer)
+  → VisionSystem (pose lifecycle) → SwerveDrivePoseEstimator (WPILib fusion)
+
+Key value: High-accuracy, drift-free localization using VR SLAM without
+relying on AprilTag visibility.
+Useful when: Tags are blocked, need very precise pose, or as a fusion source
+alongside PhotonVision.
+
+Wiki pages: QuestNav-Overview, QuestNav-Architecture, QuestNav-Integration,
+            QuestNav-Examples, Nodes-QuestNav
+
+--------------------------------------------------------------------------------
+4. PHOTONVISION INTEGRATION
+--------------------------------------------------------------------------------
+AprilTag-based field-relative localization using cameras and PhotonVision.
+
+What it does:
+  - Detects AprilTag IDs and pixel positions per frame
+  - Estimates camera-to-tag geometry (yaw, pitch, distance)
+  - Solves full robot pose using the known field AprilTag layout
+  - Timestamps measurements for WPILib latency compensation
+  - Feeds pose estimates into the drivetrain estimator alongside odometry
+  - Implements the same VisionSystem base class as QuestNav
+
+Key value: Absolute field-relative pose re-anchoring to correct odometry drift.
+Useful when: Autonomous routines needing precise start alignment, path following,
+auto-aim, and drift correction during long matches.
+
+Wiki pages: PhotonVision-Overview, PhotonVision-Quick-Start, PhotonVision-Pose,
+            PhotonVision-Integration, PhotonVision-Debugging
+
+--------------------------------------------------------------------------------
+5. SHARED VISION SYSTEM FRAMEWORK
+--------------------------------------------------------------------------------
+A base class (VisionSystem.java) that standardizes pose lifecycle management
+for all vision sources (PhotonVision, QuestNav, future Limelight, etc.).
+
+What it provides:
+  - acceptPose() / invalidatePose() — pose lifecycle API
+  - getLatestPose() — returns only fresh, valid poses
+  - resetDrivetrainToVisionPose() — safe odometry reset
+  - addVisionMeasurementToDrivetrain() — WPILib fusion hook
+  - Freshness filtering and timestamp tracking
+  - Consistent telemetry publishing
+
+Key value: Both PhotonVision and QuestNav plug into the same interface, making
+multi-source fusion clean and consistent.
+
+--------------------------------------------------------------------------------
+6. REGRESSION MODEL TOOLS (Shooter Distance-to-RPM Learning)
+--------------------------------------------------------------------------------
+A data collection, labeling, and model-training pipeline that teaches the robot
+the correct shooter RPM for any distance.
+
+What it does:
+  - Records telemetry for every shot: distance, RPM, currents, pose, error,
+    made/missed status
+  - Provides a NetworkTables-based UI for students to label shots
+  - Trains a quadratic regression model using only made shots
+  - Outputs a model.json file with learned coefficients
+  - Robot code loads model.json at startup and evaluates it in real time
+    to compute RPM from current distance to target
+
+Key value: Replaces hand-tuned lookup tables with a data-driven learning system
+that improves as more shots are collected.
+Useful when: Adding new shooting locations, changing hardware, or wanting
+consistent cross-field performance.
+
+Wiki pages: Regression-Overview, Regression-Data-Collection, Regression-Training,
+            Regression-Integration, Regression-Tips
+
+--------------------------------------------------------------------------------
+7. NAVIGATION NODES SYSTEM
+--------------------------------------------------------------------------------
+A shared vocabulary of named field locations (Pose2d) used across the entire
+robot codebase to eliminate magic numbers and unify navigation.
+
+What it does:
+  - Defines named nodes for every meaningful field location, grouped into
+    nested Java classes (e.g., Nodes.Hub.CENTER, Nodes.Depot.ENTRY_LEFT)
+  - Node categories: Structure, Approach, Entry/Exit, Traversal, Midfield,
+    Start, Park/Endgame
+  - Approach nodes are auto-computed from structure center + offset + heading
+  - Single source of truth: update Nodes.java, every subsystem adapts
+
+Key value: Readable code, centralized coordinates, easy field updates.
+Used by: Navigation frameworks, RRT planner, vision systems, autonomous routines,
+         simulation tools.
+
+Wiki pages: Nodes-Overview, Nodes-Implementation, Nodes-Categories,
+            Nodes-Approach, Nodes-Updating
+
+--------------------------------------------------------------------------------
+8. AUTOSEQUENCE BUILDER
+--------------------------------------------------------------------------------
+A fluent builder for writing autonomous routines using Navigation Nodes.
+
+What it does:
+  - Provides a builder API that chains movement and action steps:
+      new AutoSequence(drivetrain)
+          .moveTo(Nodes.Hub.APPROACH_FRONT)
+          .score()
+          .moveTo(Nodes.Depot.ENTRY_LEFT)
+          .intake()
+          .build();
+  - Produces a WPILib SequentialCommandGroup under the hood
+  - Mentor-provided base: .moveTo(), .waitSeconds(), .build()
+  - Student-extended: .score(), .intake(), .shoot(), .parallel(), .race()
+
+Key value: Students can write autonomous routines as readable scripts without
+touching low-level command wiring.
+
+Wiki pages: AutoSequence-Overview, AutoSequence-Architecture,
+            AutoSequence-Routines, AutoSequence-Extending, AutoSequence-Chooser
+
+--------------------------------------------------------------------------------
+9. MECHANICS UTILITIES — GearRatio
+--------------------------------------------------------------------------------
+A lightweight, unit-safe class for converting between motor-side and
+mechanism-side speeds and torques.
+
+What it does:
+  - toOutput(motorRPS) → wheel/mechanism RPS
+  - toMotor(wheelRPS)  → motor RPS required
+  - Supports simple gearboxes: GearRatio.gearBox(10, 1)
+  - Supports multi-stage gearboxes via builder:
+      GearRatio.Gears().add(12, 36).add(18, 54).build()
+  - Handles reductions and speedups correctly
+
+Key value: Eliminates a common class of mechanical math bugs in FRC code.
+Useful for: Any subsystem where motor speed ≠ mechanism speed (shooters,
+drivetrains, elevators, intakes, etc.)
+
+Wiki pages: Utilities-GearRatio, Utilities-Mechanics-Overview
+
+--------------------------------------------------------------------------------
+10. MECHANICS UTILITIES — FlywheelModel
+--------------------------------------------------------------------------------
+A physics-based simulation model for a rotating flywheel driven by a DC motor.
+
+What it does:
+  - Models motor back-EMF, torque constant (Kt), motor resistance (R), and Kv
+  - Applies rotational inertia (moment of inertia) to compute angular acceleration
+  - Integrates acceleration into RPM each timestep (dt ≈ 20ms)
+  - Applies friction/drag losses
+  - stepRPM(currentRPM, voltage, dt) → new RPM
+
+Physics model:
+  V = I*R + Kv*ω  →  τ = Kt*I  →  α = τ / I_flywheel  →  RPM += α*dt*60
+
+Key value: Realistic shooter simulation without hardware — produces accurate
+spin-up curves, overshoot, and settling behavior for PID/feedforward tuning.
+
+Wiki pages: Utilities-FlywheelModel, Utilities-Mechanics-Overview
+
+================================================================================
+  PRIORITIZATION NOTES (rough order for re-adding to 1507Base)
+================================================================================
+
+HIGH PRIORITY (core to competition robot):
+  1. PhotonVision Integration + Shared VisionSystem Framework
+  2. QuestNav (already partially in use, high localization value)
+  3. Navigation Nodes System (foundational — other things depend on it)
+  4. GearRatio Utility (simple, high-value, low effort)
+
+MEDIUM PRIORITY (autonomous / control quality):
+  5. RRT Path Generator (powerful, but PathPlanner may cover basic cases)
+  6. AutoSequence Builder (student-friendly autonomous scripting)
+  7. FlywheelModel (valuable for simulation and PID tuning)
+
+LOWER PRIORITY / NICE-TO-HAVE:
+  8. Shooter PID Tuner (useful at start of season, season-specific)
+  9. Regression Model Tools (high value if shooting from variable distances)
+
+================================================================================

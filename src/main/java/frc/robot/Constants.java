@@ -22,7 +22,7 @@ import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.util.Units;
-
+import frc.lib.core.util.MotorConfig;
 import frc.robot.generated.TunerConstants;
 import frc.robot.mechanics.GearRatio;
 
@@ -35,6 +35,25 @@ import frc.robot.mechanics.GearRatio;
  * constants are needed, to reduce verbosity.
  */
 public final class Constants {
+
+     public static final class kAgitator {
+
+        /**
+         * MotorConfig now contains ONLY tuning values.
+         * Hardware (CAN ID) lives in AgitatorHardware.
+         */
+        public static final MotorConfig CONFIG =
+            MotorConfig.builder()
+                .inverted(true)
+                .withVoltageLimits(3.5, -3.5)
+                .withStatorCurrentLimit(Amps.of(80))
+                .build();
+
+
+        /** Duty cycles for agitator behavior. */
+        public static final double AGITATE_TO_SHOOTER_DUTY = 0.7;
+        public static final double AGITATE_TO_INTAKE_DUTY = -0.3;
+    }
 
     // ============================================================
     //  SPEED PROFILES
