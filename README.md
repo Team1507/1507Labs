@@ -4,7 +4,7 @@
 
 ## How this repo works
 
-- **`main` is an exact copy of [1507Base](https://github.com/Team1507/1507Base)'s `SystemCore` branch** (WPILib 2027 alpha 7, Commands v3, the 2027 swerve, logging and auto route framework). Only Labs' own files differ: this README, `EXPERIMENTS_OVERVIEW.txt` and `.claude/settings.local.json`. Nobody experiments on `main`.
+- **`main` is an exact copy of [1507Base](https://github.com/Team1507/1507Base)'s `SystemCore` branch** (WPILib 2027 alpha 7, Commands v3, the 2027 swerve, logging and auto route framework). Only Labs' own files differ: this README and `.claude/settings.local.json`. Nobody experiments on `main`.
 - **Each experiment gets its own branch** made from `main`, named `exp/<name>` (for example `exp/policy-driver`). CI builds and tests every branch on every push.
 - Open the repo with **WPILib 2027 VS Code** (alpha 7). The 2026 VS Code can't build it.
 
@@ -29,7 +29,7 @@ Because `main` matches 1507Base, the experiment's changes are just `git diff mai
 
 ### The 2026 experiments
 
-The 2026 (RoboRIO) experiments are archived at tag **`labs-2026-final`** (branch `archive/2026-experiments`): Policy Assist over NetworkTables, the Shooter and ShooterModel, PathPlanner, AdvantageKit. They use 2026 APIs, so read them for ideas and redo them on a new `exp/` branch. [EXPERIMENTS_OVERVIEW.txt](EXPERIMENTS_OVERVIEW.txt) catalogues them.
+The 2026 (RoboRIO) experiments are archived at tag **`labs-2026-final`** (branch `archive/2026-experiments`): Policy Assist over NetworkTables, the Shooter and ShooterModel, PathPlanner, AdvantageKit. They use 2026 APIs, so read them for ideas and redo them on a new `exp/` branch. The [Archive (2026)](https://github.com/Team1507/1507Labs/wiki/Archive-2026) wiki page catalogues them, along with the older Labs topics (Shooter PID Tuner, RRT, PhotonVision, Regression tools).
 
 ## Planned experiments
 
