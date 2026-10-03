@@ -8,28 +8,46 @@
 
 package org.team1507.lib.core.swerve;
 
-import static edu.wpi.first.units.Units.*;
+import static org.wpilib.units.Units.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusSignal;
 import com.ctre.phoenix6.hardware.CANcoder;
+import com.ctre.phoenix6.hardware.ParentDevice;
 import com.ctre.phoenix6.sim.CANcoderSimState;
 
-import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.kinematics.SwerveModulePosition;
-import edu.wpi.first.math.kinematics.SwerveModuleState;
-import edu.wpi.first.units.measure.Angle;
-import edu.wpi.first.units.measure.AngularVelocity;
-import edu.wpi.first.wpilibj.RobotBase;
+import org.wpilib.math.geometry.Rotation2d;
+import org.wpilib.math.kinematics.SwerveModulePosition;
+import org.wpilib.math.kinematics.SwerveModuleVelocity;
+import org.wpilib.units.measure.Angle;
+import org.wpilib.units.measure.AngularVelocity;
+import org.wpilib.framework.RobotBase;
+import org.wpilib.telemetry.Telemetry;
+import org.wpilib.telemetry.TelemetryTable;
 
 import org.team1507.lib.core.impl.ctre.Motor1507;
-import org.team1507.lib.core.logging.Telemetry;
 
+/**
+ * One swerve module: a drive motor, a steer motor, and the CANcoder that
+ * knows which way the wheel points. Converts between wheel meters/angles and
+ * motor rotations, including the drive/steer coupling correction.
+ *
+ * <p>Built by SwerveConfig from the Tuner X paste zone; used by Swerve.
+ */
 public final class SwerveModule1507 {
 
+    /**
+     * Wheel and gearing numbers shared by all four modules.
+     *
+     * @param driveGearRatio    drive motor turns per wheel turn
+     * @param couplingRatio     drive motor turns per module (steer) turn
+     * @param wheelRadiusMeters wheel radius in meters
+     */
     public record MathConfig(
         double driveGearRatio,
-        double steerGearRatio,
         double couplingRatio,
         double wheelRadiusMeters
     ) {
@@ -39,24 +57,33 @@ public final class SwerveModule1507 {
     }
 
     private final String name;
+    /** Where this module's targets are logged (Swerve/<name>/...). */
+    private final TelemetryTable table;
 
     private final Motor1507 drive;
     private final Motor1507 steer;
     private final CANcoder encoder;
 
-    private final Rotation2d encoderOffset;
     private final MathConfig math;
     private final double driveMetersScale;
 
-    private Rotation2d lastAngle = Rotation2d.kZero;
+    private Rotation2d lastAngle = Rotation2d.ZERO;
 
     // Sim state
     private double simSteerAngleRotations = 0.0;
     private double simDriveVelocityRps = 0.0;
     private double simDrivePositionRotations = 0.0;
-    private CANcoderSimState encoderSim;
 
-    private final StatusSignal<Angle> absPosition;
+    /**
+     * CANcoder position in module rotations. The magnet offset is stored on the
+     * CANcoder (see SwerveConfig.createModule), so 0 = wheel pointing forward.
+     *
+     * <p>This is the CONTINUOUS position (it counts past 1.0 rotation), not
+     * getAbsolutePosition(), which wraps from +0.5 to -0.5. The coupling
+     * correction below multiplies this value, so a wrap would add a fake jump
+     * of ~18 cm to odometry every time a wheel crossed the wrap point.
+     */
+    private final StatusSignal<Angle> azimuthPosition;
     private final StatusSignal<AngularVelocity> azimuthVelocity;
 
     private final BaseStatusSignal[] allSignals;
@@ -66,38 +93,34 @@ public final class SwerveModule1507 {
         Motor1507 drive,
         Motor1507 steer,
         CANcoder encoder,
-        Rotation2d encoderOffset,
         MathConfig math,
         double driveMetersScale
     ) {
         this.name = name;
+        this.table = Telemetry.getTable("Swerve/" + name);
         this.drive = drive;
         this.steer = steer;
         this.encoder = encoder;
-        this.encoderOffset = encoderOffset;
         this.math = math;
         this.driveMetersScale = driveMetersScale;
 
-        this.absPosition = encoder.getAbsolutePosition();
+        this.azimuthPosition = encoder.getPosition();
         this.azimuthVelocity = encoder.getVelocity();
-        this.encoderSim = encoder.getSimState();
 
         BaseStatusSignal.setUpdateFrequencyForAll(
             100.0,
-            absPosition,
+            azimuthPosition,
             azimuthVelocity
         );
 
-        BaseStatusSignal[] driveSignals = drive.getSignals(); // 6
-        BaseStatusSignal[] steerSignals = steer.getSignals(); // 6
-        this.allSignals = new BaseStatusSignal[14];
-        System.arraycopy(driveSignals, 0, allSignals, 0, 6);
-        System.arraycopy(steerSignals, 0, allSignals, 6, 6);
-        allSignals[12] = absPosition;
-        allSignals[13] = azimuthVelocity;
-
-        Telemetry.set(key("Drive/MetersScale"), driveMetersScale);
-        Telemetry.set(key("Initialized"), true);
+        // Every drive, steer and CANcoder signal, refreshed together by Swerve.
+        // Built from the motors' own lists, so adding a motor signal can't break it.
+        List<BaseStatusSignal> signals = new ArrayList<>();
+        signals.addAll(List.of(drive.getSignals()));
+        signals.addAll(List.of(steer.getSignals()));
+        signals.add(azimuthPosition);
+        signals.add(azimuthVelocity);
+        this.allSignals = signals.toArray(BaseStatusSignal[]::new);
     }
 
     // ============================================================
@@ -110,29 +133,27 @@ public final class SwerveModule1507 {
      *
      * @param desired the target module state
      */
-    public void setDesiredState(SwerveModuleState desired) {
+    public void setDesiredState(SwerveModuleVelocity desired) {
         Rotation2d current = getAngle();
-        SwerveModuleState optimized = new SwerveModuleState(
-            desired.speedMetersPerSecond,
+        SwerveModuleVelocity optimized = new SwerveModuleVelocity(
+            desired.velocity,
             desired.angle
         );
 
-        optimized.optimize(current);
+        // 2027: SwerveModuleVelocity is immutable. optimize() returns a NEW object
+        // instead of changing this one, so the result must be assigned back.
+        optimized = optimized.optimize(current);
 
         Rotation2d targetAngle =
-            Math.abs(optimized.speedMetersPerSecond) < 0.01
+            Math.abs(optimized.velocity) < 0.01
                 ? lastAngle
                 : optimized.angle;
 
         double driveRps =
-            metersPerSecondToDriveMotorRps(optimized.speedMetersPerSecond);
+            metersPerSecondToDriveMotorRps(optimized.velocity);
 
-        drive.setVelocityRPS(driveRps);
-
-        steer.setPositionVoltage(
-            targetAngle.getRotations(),
-            0.0
-        );
+        drive.setRPS(driveRps);
+        steer.setPositionRotations(targetAngle.getRotations());
 
         // In sim, instantly snap to the target so getAngle() returns
         // the correct value next loop — simulates a perfect steer controller
@@ -143,9 +164,9 @@ public final class SwerveModule1507 {
 
         lastAngle = targetAngle;
 
-        Telemetry.set(key("Drive/TargetMps"), optimized.speedMetersPerSecond);
-        Telemetry.set(key("Drive/TargetMotorRps"), driveRps);
-        Telemetry.set(key("Steer/TargetAngleRad"), targetAngle.getRadians());
+        // The motors log their own targets (Drive/TargetRPM, Steer/TargetPositionDeg).
+        // This is the wheel speed the drive target came from.
+        table.log("TargetWheelMps", optimized.velocity);
     }
 
     /** Stops both the drive and steer motors immediately. */
@@ -170,7 +191,7 @@ public final class SwerveModule1507 {
      */
     public void brakeToAngle(Rotation2d angle) {
         drive.stop();
-        steer.setPositionVoltage(angle.getRotations(), 0.0);
+        steer.setPositionRotations(angle.getRotations());
 
         if (RobotBase.isSimulation()) {
             simSteerAngleRotations = angle.getRotations();
@@ -185,13 +206,19 @@ public final class SwerveModule1507 {
     // ============================================================
 
     /**
-     * Called every loop from Swerve.simulationPeriodic().
+     * Called every loop in simulation from Swerve.simulationPeriodic().
      * Updates the CANcoder sim state so getAngle() returns real values,
      * and integrates drive position.
      */
     public void simulationUpdate(double dtSeconds) {
-        encoderSim.setRawPosition(simSteerAngleRotations + encoderOffset.getRotations());
+        // Keep the CANcoder sim state in step with the simulated steer angle.
+        // (getAngle() reads the sim value directly; this keeps the device's
+        // own signals plausible for anything that reads them.)
+        CANcoderSimState encoderSim = encoder.getSimState();
+        encoderSim.setRawPosition(simSteerAngleRotations);
         encoderSim.setVelocity(0.0);
+
+        // Integrate drive position
         simDrivePositionRotations += simDriveVelocityRps * dtSeconds;
     }
 
@@ -199,20 +226,17 @@ public final class SwerveModule1507 {
     // Observation
     // ============================================================
 
-    /** Returns the current steer angle, corrected for the encoder offset. */
+    /** Returns the current steer angle (0 = wheel forward; the offset is stored on the CANcoder). */
     public Rotation2d getAngle() {
-        if (RobotBase.isSimulation()) {
-            return Rotation2d.fromRotations(simSteerAngleRotations);
-        }
-        double rotations = absPosition.getValue().in(Rotations);
-        return Rotation2d.fromRotations(rotations).minus(encoderOffset);
+        return Rotation2d.fromRotations(azimuthRotations());
     }
 
-    private double azimuthRotationsRaw() {
+    /** Continuous azimuth position in module rotations (does not wrap). */
+    private double azimuthRotations() {
         if (RobotBase.isSimulation()) {
-            return simSteerAngleRotations + encoderOffset.getRotations();
+            return simSteerAngleRotations;
         }
-        return absPosition.getValue().in(Rotations);
+        return azimuthPosition.getValue().in(Rotations);
     }
 
     private double azimuthRpsRaw() {
@@ -221,12 +245,12 @@ public final class SwerveModule1507 {
     }
 
     /** Returns the current module state (speed in m/s and steer angle). */
-    public SwerveModuleState getState() {
+    public SwerveModuleVelocity getState() {
         double mps = RobotBase.isSimulation()
             ? simDriveVelocityRps * math.wheelCircumferenceMeters()
             : wheelRpsToMetersPerSecond(correctedWheelRps()) * driveMetersScale;
 
-        return new SwerveModuleState(mps, getAngle());
+        return new SwerveModuleVelocity(mps, getAngle());
     }
 
     /** Returns the current module position (distance traveled in meters and steer angle). */
@@ -243,24 +267,24 @@ public final class SwerveModule1507 {
         return allSignals;
     }
 
-    /** @deprecated Replaced by {@link #getAllSignals()} — Swerve now batches all signals in one call. */
-    @Deprecated
-    public void refreshSignals() {
-        // no-op — Swerve.periodic() calls BaseStatusSignal.refreshAll(allSignals) for all modules
-    }
-
     // ============================================================
     // CAN Bus Access (for bus optimization only)
     // ============================================================
 
+    /** The drive motor (Swerve counts it toward the drivetrain's total current). */
+    public Motor1507 getDriveMotor() { return drive; }
+
+    /** The steer motor (Swerve counts it toward the drivetrain's total current). */
+    public Motor1507 getSteerMotor() { return steer; }
+
     /** Returns the drive motor's Phoenix 6 device handle. Used to optimize CAN bus utilization. */
-    public com.ctre.phoenix6.hardware.ParentDevice getDriveDevice() { return drive.getDevice(); }
+    public ParentDevice getDriveDevice() { return drive.getDevice(); }
 
     /** Returns the steer motor's Phoenix 6 device handle. Used to optimize CAN bus utilization. */
-    public com.ctre.phoenix6.hardware.ParentDevice getSteerDevice() { return steer.getDevice(); }
+    public ParentDevice getSteerDevice() { return steer.getDevice(); }
 
     /** Returns the CANcoder's Phoenix 6 device handle. Used to optimize CAN bus utilization. */
-    public com.ctre.phoenix6.hardware.ParentDevice getEncoderDevice() { return encoder; }
+    public ParentDevice getEncoderDevice() { return encoder; }
 
     // ============================================================
     // Faults
@@ -281,12 +305,12 @@ public final class SwerveModule1507 {
     // ============================================================
 
     private double correctedDriveMotorRotations() {
-        return drive.getRotorPosition()
-            - (azimuthRotationsRaw() * math.couplingRatio());
+        return drive.getPositionRotations()
+            - (azimuthRotations() * math.couplingRatio());
     }
 
     private double correctedDriveMotorRps() {
-        return drive.getRotorVelocity()
+        return drive.getRPS()
             - (azimuthRpsRaw() * math.couplingRatio());
     }
 
@@ -310,9 +334,5 @@ public final class SwerveModule1507 {
         double wheelRps = mps / math.wheelCircumferenceMeters();
         return (wheelRps * math.driveGearRatio())
             + (azimuthRpsRaw() * math.couplingRatio());
-    }
-
-    private String key(String field) {
-        return "Swerve/" + name + "/" + field;
     }
 }

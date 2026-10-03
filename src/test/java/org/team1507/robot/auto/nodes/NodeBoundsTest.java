@@ -11,11 +11,11 @@ package org.team1507.robot.auto.nodes;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Translation2d;
+import org.wpilib.math.geometry.Pose2d;
+import org.wpilib.math.geometry.Translation2d;
 
 import org.junit.jupiter.api.Test;
-import org.team1507.robot.Constants.kSwerve;
+import org.team1507.robot.subsystems.SwerveConfig;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NodeBoundsTest
@@ -84,7 +84,7 @@ class NodeBoundsTest {
      * This matches the radius used for MAX_ANGULAR_RATE in Constants.
      */
     private static final double ROBOT_CLEARANCE_RADIUS =
-        kSwerve.FRONT_LEFT_LOCATION.getNorm() + BUMPER_BUFFER_METERS;
+        SwerveConfig.DRIVE_BASE_RADIUS + BUMPER_BUFFER_METERS;
 
 
     // =========================================================================

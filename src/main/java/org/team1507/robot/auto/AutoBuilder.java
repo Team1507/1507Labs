@@ -2,74 +2,45 @@
 //  ██║    ██║██╔══██╗██╔══██╗██║     ██╔═══██╗██╔════╝██║ ██╔╝██╔════╝
 //  ██║ █╗ ██║███████║██████╔╝██║     ██║   ██║██║     █████╔╝ ███████╗
 //  ██║███╗██║██╔══██║██╔══██╗██║     ██║   ██║██║     ██╔═██╗ ╚════██║
-//  ╚███╔███╔╝██║  ██║██║  ██║███████╗╚██████╔╝╚██████╔╝╚██╝  ██╗███████║
+//  ╚███╔███╔╝██║  ██║██║  ██║███████╗╚██████╔╝╚██████╗██║  ██╗███████║
 //   ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝
 //                           TEAM 1507 WARLOCKS
 
 package org.team1507.robot.auto;
 
-import com.pathplanner.lib.config.PIDConstants;
-import com.pathplanner.lib.config.RobotConfig;
-import com.pathplanner.lib.controllers.PPHolonomicDriveController;
-
-import org.team1507.lib.core.util.Alliance;
-import org.team1507.robot.subsystems.Swerve;
+import org.team1507.lib.core.auto.RouteDriver;
+import org.team1507.robot.Robot;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AutoBuilder
 //
-// Static registry that holds all subsystem references and exposes them as
-// zero-argument command factories. Initialized ONCE from Robot.java after
-// all subsystems are created.
+// Gives AutoSequence access to the robot, so auto routines never pass
+// subsystems around. Robot.java calls AutoBuilder.init(this) once, at the end of
+// its constructor.
 //
-// HOW TO ADD A NEW SUBSYSTEM EACH YEAR:
-//   1. Import your subsystem at the top of this file.
-//   2. Add a public static field for it below the existing fields.
-//   3. Add it as a parameter to init() and assign it.
-//   4. Add your command factory methods in the appropriate section below.
-//   5. Call AutoBuilder.init(...) in Robot.java with the new subsystem.
+// Every subsystem on the Robot is reachable as AutoBuilder.robot.<name>
+// (e.g. AutoBuilder.robot.swerve, AutoBuilder.robot.intake). Adding a subsystem
+// to Robot.java is all it takes; there is nothing to register here.
+// (Before 2027, each subsystem needed a field and an init() parameter here, and
+// forgetting one crashed the auto at enable.)
 //
-// Students should NEVER instantiate this class. Always call AutoBuilder.method().
+// Students should NEVER instantiate this class; use the static fields.
 // ─────────────────────────────────────────────────────────────────────────────
 public final class AutoBuilder {
 
-    // -------------------------------------------------------------------------
-    // Subsystem Registry
-    // -------------------------------------------------------------------------
+    /** The robot, with every subsystem. Set once by Robot.java. */
+    public static Robot robot;
 
-    public static Swerve swerve;
+    /**
+     * The policy driver, for autos written with {@code new AutoSequence(Driver.POLICY)}.
+     * Stays null until the policy code (developed in 1507Labs) installs it; a
+     * policy auto without it reports an error and does not drive.
+     */
+    public static RouteDriver policyDriver = null;
 
-    // ADD NEW SUBSYSTEMS HERE each year (e.g. climber, indexer, turret).
-
-    // -------------------------------------------------------------------------
-    // Initialization
-    //
-    // Called ONCE from Robot.java constructor, after all subsystems are built.
-    // Add new subsystem parameters here as the robot grows each year.
-    // -------------------------------------------------------------------------
-
-    public static void init(Swerve swerve) {
-        AutoBuilder.swerve = swerve;
-
-        // Configure PathPlanner once. Uses fully-qualified class name to avoid conflict
-        // with this class (both are named AutoBuilder in different packages).
-        try {
-            com.pathplanner.lib.auto.AutoBuilder.configure(
-                swerve::getPose,
-                swerve::resetPose,
-                swerve::getChassisSpeeds,
-                (speeds, feedforwards) -> swerve.driveRobotRelative(speeds),
-                new PPHolonomicDriveController(
-                    new PIDConstants(5.0, 0.0, 0.0),  // translation PID — tune in sim
-                    new PIDConstants(5.0, 0.0, 0.0)   // rotation PID — tune in sim
-                ),
-                RobotConfig.fromGUISettings(),
-                () -> Alliance.isRed(),
-                swerve
-            );
-        } catch (Exception e) {
-            throw new RuntimeException("PathPlanner AutoBuilder.configure() failed — check deploy/pathplanner/settings.json", e);
-        }
+    /** Called ONCE from the Robot.java constructor, after all subsystems are built. */
+    public static void init(Robot robot) {
+        AutoBuilder.robot = robot;
     }
 
     // Prevent instantiation — this is a static utility class.

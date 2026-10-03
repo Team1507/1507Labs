@@ -8,13 +8,16 @@
 
 package org.team1507.lib.core.impl.ctre;
 
-import static edu.wpi.first.units.Units.Amps;
-import static edu.wpi.first.units.Units.Volts;
+import static org.wpilib.units.Units.Amps;
+import static org.wpilib.units.Units.Volts;
 
+import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.configs.*;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.hardware.TalonFXS;
 import com.ctre.phoenix6.signals.*;
+
+import org.wpilib.driverstation.DriverStationErrors;
 
 import org.team1507.lib.core.util.MotorConfig;
 import org.team1507.lib.core.util.MotorConfig.ControlMode;
@@ -71,6 +74,18 @@ public final class CtreMotorConfigurator {
      * @param configs ordered motor configuration specifications
      */
     private static void applyFX(TalonFX motor, MotorConfig[] configs) {
+        safeApply(motor, toTalonFXConfiguration(configs));
+    }
+
+    /**
+     * Builds the complete CTRE {@link TalonFXConfiguration} for these configs
+     * without touching hardware: every slot, the base settings from slot 0, and
+     * finally slot 0's {@code withCtreConfig} override (so it wins).
+     *
+     * <p>Public so tests can check exactly what a MotorConfig turns into.
+     */
+    public static TalonFXConfiguration toTalonFXConfiguration(MotorConfig... configs) {
+        requireSlot0(configs);
         TalonFXConfiguration cfg = new TalonFXConfiguration();
 
         for (MotorConfig config : configs) {
@@ -78,7 +93,11 @@ public final class CtreMotorConfigurator {
         }
 
         applyBase(cfg, configs[0]);
-        safeApply(motor, cfg);
+
+        if (configs[0].ctreFxConfig() != null) {
+            configs[0].ctreFxConfig().accept(cfg);
+        }
+        return cfg;
     }
 
     // ============================================================
@@ -96,6 +115,12 @@ public final class CtreMotorConfigurator {
      * @param configs ordered motor configuration specifications
      */
     private static void applyFXS(TalonFXS motor, MotorConfig[] configs) {
+        safeApply(motor, toTalonFXSConfiguration(configs));
+    }
+
+    /** Same as {@link #toTalonFXConfiguration}, for TalonFXS (Minion) motors. */
+    public static TalonFXSConfiguration toTalonFXSConfiguration(MotorConfig... configs) {
+        requireSlot0(configs);
         TalonFXSConfiguration cfg = new TalonFXSConfiguration();
 
         cfg.Commutation.MotorArrangement = MotorArrangementValue.Minion_JST;
@@ -105,7 +130,17 @@ public final class CtreMotorConfigurator {
         }
 
         applyBase(cfg, configs[0]);
-        safeApply(motor, cfg);
+
+        if (configs[0].ctreFxsConfig() != null) {
+            configs[0].ctreFxsConfig().accept(cfg);
+        }
+        return cfg;
+    }
+
+    private static void requireSlot0(MotorConfig[] configs) {
+        if (configs.length == 0 || configs[0].slotNumber() != 0) {
+            throw new IllegalArgumentException("First MotorConfig must be slot 0");
+        }
     }
 
     // ============================================================
@@ -171,6 +206,7 @@ public final class CtreMotorConfigurator {
             slot.kV = config.kV();
             slot.kS = config.kS();
             slot.kA = config.kA();
+            slot.StaticFeedforwardSign = config.staticFeedforwardSign();
         }
         applyGravity(config, g -> slot.kG = g, t -> slot.GravityType = t);
     }
@@ -184,6 +220,7 @@ public final class CtreMotorConfigurator {
             slot.kV = config.kV();
             slot.kS = config.kS();
             slot.kA = config.kA();
+            slot.StaticFeedforwardSign = config.staticFeedforwardSign();
         }
         applyGravity(config, g -> slot.kG = g, t -> slot.GravityType = t);
     }
@@ -197,6 +234,7 @@ public final class CtreMotorConfigurator {
             slot.kV = config.kV();
             slot.kS = config.kS();
             slot.kA = config.kA();
+            slot.StaticFeedforwardSign = config.staticFeedforwardSign();
         }
         applyGravity(config, g -> slot.kG = g, t -> slot.GravityType = t);
     }
@@ -244,6 +282,7 @@ public final class CtreMotorConfigurator {
         applyCurrentLimits(cfg.CurrentLimits, base);
         applyTorqueCurrent(cfg.TorqueCurrent, base);
         applyFeedback(cfg.Feedback, base.feedback());
+        applyMotionMagic(cfg.MotionMagic, base);
 
         cfg.ClosedLoopGeneral.ContinuousWrap = base.continuousWrap();
     }
@@ -262,8 +301,21 @@ public final class CtreMotorConfigurator {
         applyLimitSwitches(cfg.HardwareLimitSwitch, base);
         applyCurrentLimits(cfg.CurrentLimits, base);
         applyExternalFeedback(cfg.ExternalFeedback, base.feedback());
+        applyMotionMagic(cfg.MotionMagic, base);
 
         cfg.ClosedLoopGeneral.ContinuousWrap = base.continuousWrap();
+    }
+
+    /**
+     * Applies Motion Magic cruise velocity and acceleration (mechanism
+     * rotations/s and rotations/s²) when the config sets them. Without these,
+     * CTRE's defaults are 0 and a Motion Magic move never starts.
+     */
+    private static void applyMotionMagic(MotionMagicConfigs mm, MotorConfig base) {
+        if (!Double.isNaN(base.motionMagicCruiseRps())) {
+            mm.MotionMagicCruiseVelocity = base.motionMagicCruiseRps();
+            mm.MotionMagicAcceleration = base.motionMagicAccelRps2();
+        }
     }
 
     /**
@@ -338,6 +390,14 @@ public final class CtreMotorConfigurator {
 
         cl.SupplyCurrentLimit = base.supplyCurrentLimit().in(Amps);
         cl.SupplyCurrentLimitEnable = true;
+
+        // Lower (sustained) supply limit. When a config doesn't set one, CTRE's
+        // default stays in place: 40 A after 1 s of limiting. That default only
+        // matters for supply limits above 40 A, and it's a useful safety net there.
+        if (!Double.isNaN(base.supplyLowerLimitAmps())) {
+            cl.SupplyCurrentLowerLimit = base.supplyLowerLimitAmps();
+            cl.SupplyCurrentLowerTime = base.supplyLowerTime();
+        }
     }
 
     // ============================================================
@@ -391,11 +451,7 @@ public final class CtreMotorConfigurator {
      * @param cfg    the configuration to apply
      */
     private static void safeApply(TalonFX motor, TalonFXConfiguration cfg) {
-        var status = motor.getConfigurator().apply(cfg);
-        if (!status.isOK()) {
-            System.out.println("[WARN] Failed to apply config to FX "
-                    + motor.getDeviceID() + ": " + status);
-        }
+        applyWithRetry("TalonFX " + motor.getDeviceID(), () -> motor.getConfigurator().apply(cfg));
     }
 
     /**
@@ -406,10 +462,35 @@ public final class CtreMotorConfigurator {
      * @param cfg    the configuration to apply
      */
     private static void safeApply(TalonFXS motor, TalonFXSConfiguration cfg) {
-        var status = motor.getConfigurator().apply(cfg);
-        if (!status.isOK()) {
-            System.out.println("[WARN] Failed to apply config to FXS "
-                    + motor.getDeviceID() + ": " + status);
+        applyWithRetry("TalonFXS " + motor.getDeviceID(), () -> motor.getConfigurator().apply(cfg));
+    }
+
+    /** Attempts before a config failure is reported. Devices still booting often reject the first try. */
+    private static final int CONFIG_ATTEMPTS = 5;
+
+    /**
+     * Runs a CTRE config call until it succeeds, up to {@link #CONFIG_ATTEMPTS} times.
+     *
+     * <p>If every attempt fails, the error is reported to the Driver Station. A
+     * motor that silently keeps factory defaults has no current limits and may
+     * have the wrong inversion or feedback sensor, so this must be visible.
+     *
+     * <p>Also used for CANcoder configuration in {@code SwerveConfig}.
+     *
+     * @param device  human-readable device name for the error message
+     * @param apply   the config call to run
+     * @return true if the config was applied
+     */
+    public static boolean applyWithRetry(String device, java.util.function.Supplier<StatusCode> apply) {
+        StatusCode status = StatusCode.OK;
+        for (int attempt = 0; attempt < CONFIG_ATTEMPTS; attempt++) {
+            status = apply.get();
+            if (status.isOK()) {
+                return true;
+            }
         }
+        DriverStationErrors.reportError(
+            "Failed to configure " + device + " after " + CONFIG_ATTEMPTS + " attempts: " + status, false);
+        return false;
     }
 }

@@ -8,9 +8,9 @@
 
 package org.team1507.robot.auto.nodes;
 
-import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Translation2d;
+import org.wpilib.math.geometry.Pose2d;
+import org.wpilib.math.geometry.Rotation2d;
+import org.wpilib.math.geometry.Translation2d;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Node
@@ -23,8 +23,9 @@ import edu.wpi.first.math.geometry.Translation2d;
 // The type difference is the distinction: robot nodes have a heading because
 // the robot must face a specific direction when it arrives. Field element nodes
 // are just locations — they describe where a structure is, not how to face it.
-// Passing a Translation2d to driveToPoint() is a compile error, which forces
-// students to think about what heading the robot needs before using the position.
+// Passing a Translation2d to checkpoint() / endpoint() is a compile error, which
+// forces students to think about what heading the robot needs before using the
+// position. (Field locations are what .facing(...) takes: "face the hub".)
 // ─────────────────────────────────────────────────────────────────────────────
 public final class Node {
 
