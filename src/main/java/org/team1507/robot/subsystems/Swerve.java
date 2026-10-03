@@ -8,42 +8,55 @@
 
 package org.team1507.robot.subsystems;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
-import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.Matrix;
-import edu.wpi.first.math.controller.PIDController;
-import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
-import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Translation2d;
-import edu.wpi.first.math.kinematics.*;
-import edu.wpi.first.math.numbers.N1;
-import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.units.measure.Angle;
-import edu.wpi.first.wpilibj.RobotBase;
-import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj2.command.Command;
-
-import static edu.wpi.first.units.Units.Degrees;
-import static edu.wpi.first.units.Units.Rotations;
+import org.wpilib.command3.Command;
+import org.wpilib.driverstation.DriverStationErrors;
+import org.wpilib.framework.RobotBase;
+import org.wpilib.math.estimator.SwerveDrivePoseEstimator;
+import org.wpilib.math.geometry.Pose2d;
+import org.wpilib.math.geometry.Rotation2d;
+import org.wpilib.math.geometry.Translation2d;
+import org.wpilib.math.kinematics.ChassisVelocities;
+import org.wpilib.math.kinematics.SwerveDriveKinematics;
+import org.wpilib.math.kinematics.SwerveModulePosition;
+import org.wpilib.math.kinematics.SwerveModuleVelocity;
+import org.wpilib.math.linalg.Matrix;
+import org.wpilib.math.numbers.N1;
+import org.wpilib.math.numbers.N3;
+import org.wpilib.math.util.MathUtil;
+import org.wpilib.system.Timer;
+import org.wpilib.units.measure.Angle;
+import org.wpilib.units.measure.AngularVelocity;
 
 import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusSignal;
-import com.ctre.phoenix6.hardware.CANcoder;
 import com.ctre.phoenix6.hardware.ParentDevice;
 import com.ctre.phoenix6.hardware.Pigeon2;
 
+import org.team1507.lib.core.auto.RouteDrivetrain;
 import org.team1507.lib.core.framework.Subsystem1507;
-import org.team1507.lib.core.impl.ctre.Motor1507;
-import org.team1507.lib.core.logging.Telemetry;
+import org.team1507.lib.core.swerve.SwerveAccelLimiter;
 import org.team1507.lib.core.swerve.SwerveModule1507;
-import org.team1507.lib.core.swerve.SwerveModule1507.MathConfig;
-import org.team1507.robot.Constants.RobotMap;
+import org.team1507.lib.core.util.Alliance;
+import org.team1507.robot.Constants;
 import org.team1507.robot.Constants.kSwerve;
+
 import static org.team1507.robot.Constants.kSwerve.kTuning.*;
 
-public final class Swerve extends Subsystem1507 {
+// ─────────────────────────────────────────────────────────────────────────────
+// Swerve
+//
+// How the drivetrain DRIVES: odometry and pose estimation, driving, headings,
+// and every swerve command (teleop, heading control, auto movement).
+//
+// This robot's drivetrain HARDWARE (CAN IDs, offsets, gear ratios, gains, the
+// Tuner X paste zone) lives in SwerveConfig.java.
+// ─────────────────────────────────────────────────────────────────────────────
+public final class Swerve extends Subsystem1507 implements RouteDrivetrain {
 
     // ------------------------------------------------------------
     // Modules
@@ -67,6 +80,7 @@ public final class Swerve extends Subsystem1507 {
 
     private final Pigeon2 pigeon;
     private final StatusSignal<Angle> yaw;
+    private final StatusSignal<AngularVelocity> yawRate;
 
     // ------------------------------------------------------------
     // Cached state
@@ -74,19 +88,27 @@ public final class Swerve extends Subsystem1507 {
 
     private Pose2d pose = new Pose2d();
 
-    private final SwerveModuleState[] moduleStates = new SwerveModuleState[4];
+    /** True once something told the robot where it is (resetPose, seed buttons, vision). */
+    private boolean poseSet = false;
+
+    private final SwerveModuleVelocity[] moduleStates = new SwerveModuleVelocity[4];
     private final SwerveModulePosition[] modulePositions = new SwerveModulePosition[4];
 
-    private final double maxSpeedMetersPerSecond;
-    private final double maxAngularMetersPerSecond;
+    // ------------------------------------------------------------
+    // Acceleration limits (every drive() call goes through them)
+    // ------------------------------------------------------------
 
+    private final SwerveAccelLimiter accelLimiter =
+        new SwerveAccelLimiter(SwerveConfig.ACCEL_LIMITS, 0.02);
+    /** Created once, so drive() doesn't make a new lambda every loop. */
+    private final Supplier<ChassisVelocities> measuredFieldSpeeds = this::getFieldRelativeSpeeds;
 
     // ------------------------------------------------------------
     // Simulated Data
     // ------------------------------------------------------------
 
     private double simHeadingRadians = 0.0;
-    private ChassisSpeeds lastCommandedSpeeds = new ChassisSpeeds();
+    private ChassisVelocities lastCommandedSpeeds = new ChassisVelocities();
 
     // ------------------------------------------------------------
     // CAN Signal Batch
@@ -100,64 +122,50 @@ public final class Swerve extends Subsystem1507 {
 
     public Swerve() {
         super("Swerve");
-        MathConfig math = new MathConfig(
-            kSwerve.DRIVE_GEAR_RATIO, kSwerve.STEER_GEAR_RATIO,
-            kSwerve.COUPLE_RATIO, kSwerve.WHEEL_RADIUS_METERS
+        SwerveConfig.checkPastedSettings();
+        for (String problem : SwerveConfig.configProblems()) {
+            DriverStationErrors.reportWarning("[Swerve config] " + problem, false);
+        }
+
+        // Modules, gyro and geometry all come from SwerveConfig (the paste zone).
+        this.frontLeft  = SwerveConfig.frontLeft();
+        this.frontRight = SwerveConfig.frontRight();
+        this.backLeft   = SwerveConfig.backLeft();
+        this.backRight  = SwerveConfig.backRight();
+        this.kinematics = SwerveConfig.kinematics();
+        this.pigeon     = new Pigeon2(SwerveConfig.pigeonId(), Constants.CAN_BUS);
+
+        // Count all 8 motors toward Swerve/TotalSupplyCurrent (logged every loop
+        // by Subsystem1507). Swerve refreshes them itself in periodic(), together
+        // with the CANcoders and gyro, so they are tracked, not managed.
+        trackMotors(
+            frontLeft.getDriveMotor(),  frontLeft.getSteerMotor(),
+            frontRight.getDriveMotor(), frontRight.getSteerMotor(),
+            backLeft.getDriveMotor(),   backLeft.getSteerMotor(),
+            backRight.getDriveMotor(),  backRight.getSteerMotor()
         );
 
-        this.frontLeft = new SwerveModule1507("FrontLeft",
-            new Motor1507("Swerve/FrontLeft/Drive", Motor1507.Type.FX, RobotMap.FL_DRIVE, kSwerve.FRONT_LEFT_DRIVE_CONFIG),
-            new Motor1507("Swerve/FrontLeft/Steer", Motor1507.Type.FX, RobotMap.FL_STEER, kSwerve.FRONT_LEFT_STEER_CONFIG),
-            new CANcoder(RobotMap.FL_ENCODER),
-            new Rotation2d(Rotations.of(RobotMap.FL_ENCODER_OFFSET)),
-            math, kSwerve.DRIVE_METERS_SCALE
-        );
+        // (false) = don't read yet: the Pigeon may still be booting, and an early
+        // read only prints a "CAN frame not received" error. periodic() refreshes them.
+        this.yaw = pigeon.getYaw(false);
+        this.yawRate = pigeon.getAngularVelocityZWorld(false);
 
-        this.frontRight = new SwerveModule1507("FrontRight",
-            new Motor1507("Swerve/FrontRight/Drive", Motor1507.Type.FX, RobotMap.FR_DRIVE, kSwerve.FRONT_RIGHT_DRIVE_CONFIG),
-            new Motor1507("Swerve/FrontRight/Steer", Motor1507.Type.FX, RobotMap.FR_STEER, kSwerve.FRONT_RIGHT_STEER_CONFIG),
-            new CANcoder(RobotMap.FR_ENCODER),
-            new Rotation2d(Rotations.of(RobotMap.FR_ENCODER_OFFSET)),
-            math, kSwerve.DRIVE_METERS_SCALE
-        );
-
-        this.backLeft = new SwerveModule1507("BackLeft",
-            new Motor1507("Swerve/BackLeft/Drive", Motor1507.Type.FX, RobotMap.BL_DRIVE, kSwerve.BACK_LEFT_DRIVE_CONFIG),
-            new Motor1507("Swerve/BackLeft/Steer", Motor1507.Type.FX, RobotMap.BL_STEER, kSwerve.BACK_LEFT_STEER_CONFIG),
-            new CANcoder(RobotMap.BL_ENCODER),
-            new Rotation2d(Rotations.of(RobotMap.BL_ENCODER_OFFSET)),
-            math, kSwerve.DRIVE_METERS_SCALE
-        );
-
-        this.backRight = new SwerveModule1507("BackRight",
-            new Motor1507("Swerve/BackRight/Drive", Motor1507.Type.FX, RobotMap.BR_DRIVE, kSwerve.BACK_RIGHT_DRIVE_CONFIG),
-            new Motor1507("Swerve/BackRight/Steer", Motor1507.Type.FX, RobotMap.BR_STEER, kSwerve.BACK_RIGHT_STEER_CONFIG),
-            new CANcoder(RobotMap.BR_ENCODER),
-            new Rotation2d(Rotations.of(RobotMap.BR_ENCODER_OFFSET)),
-            math, kSwerve.DRIVE_METERS_SCALE
-        );
-
-        this.pigeon = new Pigeon2(RobotMap.PIGEON2);
-        this.maxSpeedMetersPerSecond = kSwerve.MAX_SPEED;
-        this.maxAngularMetersPerSecond = kSwerve.MAX_ANGULAR_RATE;
-
-        this.yaw = pigeon.getYaw();
-
-        this.kinematics = new SwerveDriveKinematics(
-            kSwerve.FRONT_LEFT_LOCATION, kSwerve.FRONT_RIGHT_LOCATION,
-            kSwerve.BACK_LEFT_LOCATION,  kSwerve.BACK_RIGHT_LOCATION
-        );
+        // The heading feeds odometry and field-relative driving, so it must update
+        // every loop. Without this, optimizeBusUtilizationForAll() below would drop
+        // yaw to 4 Hz (it slows every signal that has no explicit frequency).
+        BaseStatusSignal.setUpdateFrequencyForAll(100.0, yaw, yawRate);
 
         this.poseEstimator = new SwerveDrivePoseEstimator(
             kinematics,
-            getHeading(),
+            getGyroHeading(),
             getModulePositions(),
             pose,
-            kSwerve.ODOMETRY_STD_DEV,
-            kSwerve.VISION_STD_DEV
+            kSwerve.kTuning.ODOMETRY_STD_DEV,
+            kSwerve.kTuning.VISION_STD_DEV
         );
 
         // Disable unused CAN signals on every swerve device to avoid flooding the bus.
+        // Only signals given an explicit frequency above keep their rate.
         ParentDevice.optimizeBusUtilizationForAll(
             4.0,
             frontLeft.getDriveDevice(),  frontLeft.getSteerDevice(),  frontLeft.getEncoderDevice(),
@@ -167,17 +175,18 @@ public final class Swerve extends Subsystem1507 {
             pigeon
         );
 
-        // Build the master signal array once — 4 modules × 14 signals + 1 Pigeon2 yaw = 57
-        allSignals = new BaseStatusSignal[57];
-        int idx = 0;
-        for (BaseStatusSignal s : frontLeft.getAllSignals())  allSignals[idx++] = s;
-        for (BaseStatusSignal s : frontRight.getAllSignals()) allSignals[idx++] = s;
-        for (BaseStatusSignal s : backLeft.getAllSignals())   allSignals[idx++] = s;
-        for (BaseStatusSignal s : backRight.getAllSignals())  allSignals[idx++] = s;
-        allSignals[idx] = yaw;
-
-        Telemetry.set("Swerve/Initialized", true);
+        // Build the signal array once: every module's signals + Pigeon2 yaw and yaw
+        // rate. periodic() refreshes all of them in a single CAN call.
+        List<BaseStatusSignal> signals = new ArrayList<>();
+        signals.addAll(List.of(frontLeft.getAllSignals()));
+        signals.addAll(List.of(frontRight.getAllSignals()));
+        signals.addAll(List.of(backLeft.getAllSignals()));
+        signals.addAll(List.of(backRight.getAllSignals()));
+        signals.add(yaw);
+        signals.add(yawRate);
+        allSignals = signals.toArray(BaseStatusSignal[]::new);
     }
+
 
     // ============================================================
     // Periodic
@@ -187,21 +196,21 @@ public final class Swerve extends Subsystem1507 {
     public void periodic() {
         if (RobotBase.isSimulation()) {
             // Integrate heading before poseEstimator.update() so the heading is fresh.
-            // getHeading() reads simHeadingRadians directly in sim — no Pigeon signal needed.
-            simHeadingRadians += lastCommandedSpeeds.omegaRadiansPerSecond * 0.02;
+            // getGyroHeading() reads simHeadingRadians directly in sim — no Pigeon signal needed.
+            simHeadingRadians += lastCommandedSpeeds.omega * 0.02;
         } else {
             BaseStatusSignal.refreshAll(allSignals);
         }
 
         pose = poseEstimator.update(
-            getHeading(),
+            getGyroHeading(),
             getModulePositions()
         );
 
         log("Pose", pose);
         log("DriveStalled", isAnyDriveStalled());
         log("SteerStalled", isAnySteerStalled());
-        Telemetry.set("Swerve/ModuleStates", getModuleStates());
+        log("ModuleStates", getModuleStates());
     }
 
     @Override
@@ -220,20 +229,40 @@ public final class Swerve extends Subsystem1507 {
     // ============================================================
 
     /**
-     * Drives using field-relative ChassisSpeeds (x = forward, y = left).
+     * Drives using ROBOT-relative ChassisVelocities (x = robot forward, y = robot left).
      * The kinematics layer converts these to individual module states.
      *
-     * <p>{@code ChassisSpeeds.discretize()} is applied before kinematics to correct
+     * <p>To drive in field or driver directions, convert first:
+     * {@code velocities.toRobotRelative(getPose().getRotation())} (field) or
+     * {@code velocities.toRobotRelative(getDriverRelativeHeading())} (driver).
+     * Every command in this file does that before calling drive().
+     *
+     * <p>Speeds are first passed through the acceleration limits in SwerveConfig
+     * (slip, torque, turning), so a sudden full-stick command ramps up over a
+     * few loops instead of spinning the wheels and spiking the current.
+     * {@code Swerve/AccelLimited} in the log shows when that happened.
+     * {@link #stop()} and {@link #brake()} are not limited.
+     *
+     * <p>{@code ChassisVelocities.discretize()} is applied before kinematics to correct
      * for the skew that occurs when the robot translates and rotates simultaneously
      * within a single 20 ms loop iteration. Without it, the robot arcs instead of
      * driving in a straight line.
      */
-    public void drive(ChassisSpeeds speeds) {
+    public void drive(ChassisVelocities speeds) {
+        // Acceleration limits work on field-relative velocity (see SwerveAccelLimiter).
+        Rotation2d heading = getPose().getRotation();
+        ChassisVelocities limited = accelLimiter.limit(
+            speeds.toFieldRelative(heading), measuredFieldSpeeds, Timer.getTimestamp());
+        speeds = limited.toRobotRelative(heading);
+        log("AccelLimited", accelLimiter.wasLimited());
+
         lastCommandedSpeeds = speeds;
-        SwerveModuleState[] states = kinematics.toSwerveModuleStates(
-            ChassisSpeeds.discretize(speeds, 0.02)
+        SwerveModuleVelocity[] states = kinematics.toSwerveModuleVelocities(
+            speeds.discretize(0.02)
         );
-        SwerveDriveKinematics.desaturateWheelSpeeds(states, maxSpeedMetersPerSecond);
+        // 2027: desaturateWheelVelocities returns a NEW array (it no longer edits
+        // the one passed in), so the result must be assigned back.
+        states = SwerveDriveKinematics.desaturateWheelVelocities(states, SwerveConfig.MAX_SPEED);
 
         frontLeft.setDesiredState(states[0]);
         frontRight.setDesiredState(states[1]);
@@ -242,28 +271,19 @@ public final class Swerve extends Subsystem1507 {
     }
 
     /**
-     * Drives using robot-relative ChassisSpeeds.
-     * Used by movement commands that already handle the field→robot conversion.
-     *
-     * <p>Applies {@code ChassisSpeeds.discretize()} for the same skew correction
-     * as {@link #drive(ChassisSpeeds)}.
+     * Drives with FIELD-relative velocities (x toward the Red wall, y toward the
+     * Blue driver's left). Used by auto routes; converts and calls drive().
      */
-    public void driveRobotRelative(ChassisSpeeds speeds) {
-        lastCommandedSpeeds = speeds;
-        SwerveModuleState[] states = kinematics.toSwerveModuleStates(
-            ChassisSpeeds.discretize(speeds, 0.02)
-        );
-        SwerveDriveKinematics.desaturateWheelSpeeds(states, maxSpeedMetersPerSecond);
-
-        frontLeft.setDesiredState(states[0]);
-        frontRight.setDesiredState(states[1]);
-        backLeft.setDesiredState(states[2]);
-        backRight.setDesiredState(states[3]);
+    @Override
+    public void driveFieldRelative(ChassisVelocities fieldVelocities) {
+        drive(fieldVelocities.toRobotRelative(getPose().getRotation()));
     }
 
-    /** Stops all modules immediately. */
+    /** Stops all modules immediately (not acceleration-limited). */
+    @Override
     public void stop() {
-        lastCommandedSpeeds = new ChassisSpeeds();
+        accelLimiter.reset();
+        lastCommandedSpeeds = new ChassisVelocities();
         frontLeft.stop();
         frontRight.stop();
         backLeft.stop();
@@ -282,6 +302,7 @@ public final class Swerve extends Subsystem1507 {
      * <p>Called every loop by {@link #brakeCommand()} to hold the configuration.
      */
     public void brake() {
+        accelLimiter.reset();
         frontLeft.brakeToAngle(Rotation2d.fromDegrees( 45));
         frontRight.brakeToAngle(Rotation2d.fromDegrees(-45));
         backLeft.brakeToAngle(Rotation2d.fromDegrees(-45));
@@ -292,42 +313,82 @@ public final class Swerve extends Subsystem1507 {
     // Observation
     // ============================================================
 
-    /** Returns the robot's current estimated field pose. */
+    /** Returns the robot's current estimated field pose (Blue-origin field coordinates). */
+    @Override
     public Pose2d getPose() {
         return pose;
     }
 
-    /** Returns the robot's current heading from the Pigeon2 (or simulated equivalent). */
-    public Rotation2d getHeading() {
+    /**
+     * The field direction the driver calls "forward": straight away from their
+     * own driver station. 0° on Blue, 180° on Red (field coordinates are always
+     * Blue-origin). Blue when the alliance is unknown (practice, simulation).
+     */
+    private static Rotation2d driverForward() {
+        return Alliance.isRed() ? Rotation2d.fromDegrees(180.0) : Rotation2d.ZERO;
+    }
+
+    /**
+     * The robot's heading as the DRIVER sees it: 0° = facing straight away from
+     * the driver, on either alliance. Use this for driver-relative (field-oriented)
+     * teleop driving.
+     *
+     * <p>It comes from the pose estimate, so when vision corrects the pose,
+     * driving corrects with it.
+     */
+    public Rotation2d getDriverRelativeHeading() {
+        return getPose().getRotation().minus(driverForward());
+    }
+
+    /**
+     * The raw gyro heading from the Pigeon2 (or simulated equivalent).
+     *
+     * <p>This is NOT the field heading: it starts wherever the robot was pointing
+     * at power-on. The pose estimator turns it into a field heading. Use
+     * {@code getPose().getRotation()} for the field heading, or
+     * {@link #getDriverRelativeHeading()} for teleop driving.
+     */
+    public Rotation2d getGyroHeading() {
         if (RobotBase.isSimulation()) {
             return Rotation2d.fromRadians(simHeadingRadians);
         }
-        return Rotation2d.fromDegrees(yaw.getValue().in(Degrees));
+        // Latency-compensated: projects yaw forward by yaw rate x signal age.
+        return Rotation2d.fromDegrees(BaseStatusSignal.getLatencyCompensatedValueAsDouble(yaw, yawRate));
     }
 
     /** Returns the robot's current robot-relative chassis speeds derived from module states. */
-    public ChassisSpeeds getChassisSpeeds() {
-        return kinematics.toChassisSpeeds(getModuleStates());
+    public ChassisVelocities getChassisVelocities() {
+        return kinematics.toChassisVelocities(getModuleStates());
     }
 
     /**
      * Returns the robot's velocity in field-relative coordinates.
      * Used by maintainHeadingToTarget for motion compensation.
      */
-    public ChassisSpeeds getFieldRelativeSpeeds() {
-        return ChassisSpeeds.fromRobotRelativeSpeeds(
-            kinematics.toChassisSpeeds(getModuleStates()), getHeading()
-        );
+    @Override
+    public ChassisVelocities getFieldRelativeSpeeds() {
+        return kinematics.toChassisVelocities(getModuleStates())
+            .toFieldRelative(getPose().getRotation());
     }
 
     /** Returns the configured maximum translational speed in m/s. */
     public double getMaxSpeed() {
-        return maxSpeedMetersPerSecond;
+        return SwerveConfig.MAX_SPEED;
     }
 
     /** Returns the configured maximum angular rate in rad/s. */
+    @Override
     public double getMaxAngular() {
-        return maxAngularMetersPerSecond;
+        return SwerveConfig.MAX_ANGULAR_RATE;
+    }
+
+    /**
+     * True once something told the robot where it is on the field: resetPose
+     * (an auto's start, the dashboard seed buttons) or vision. Autos use it to
+     * decide which side of the field they are on; before that, they run as written.
+     */
+    public boolean hasPoseBeenSet() {
+        return poseSet;
     }
 
     // ============================================================
@@ -338,7 +399,7 @@ public final class Swerve extends Subsystem1507 {
      * Feeds a vision-estimated pose into the pose estimator.
      *
      * @param visionPose        estimated robot pose from vision
-     * @param timestampSeconds  FPGA timestamp of the measurement
+     * @param timestampSeconds  robot timestamp (Timer.getTimestamp()) when the measurement was captured
      * @param stdDevs           measurement confidence [x (m), y (m), heading (rad)]
      */
     public void addVisionMeasurement(
@@ -351,21 +412,26 @@ public final class Swerve extends Subsystem1507 {
             timestampSeconds,
             stdDevs
         );
+        poseSet = true;
     }
 
     /**
-     * Resets the robot's heading to 0° so its current facing direction becomes
-     * field-forward. Also resets the pose estimator's heading component.
+     * Tells the robot it is facing straight away from the driver.
+     *
+     * <p>Sets the pose estimator's FIELD heading to the driver's forward direction:
+     * 0° on Blue, 180° on Red. The robot's position is kept. The raw gyro is not
+     * touched; the pose estimator handles the offset.
+     *
+     * <p>(Until 2027 this set the heading to 0° on both alliances, which made the
+     * field pose 180° wrong on Red and confused auto commands and vision.)
+     *
+     * <p>With QuestNav/AprilTag vision correcting the pose, this is only a fallback
+     * for when vision isn't available.
      */
     public void zeroHeading() {
-        pigeon.setYaw(0.0);
-        // In simulation, getHeading() reads simHeadingRadians directly — the Phoenix
-        // sim backend doesn't update it synchronously from setYaw(). Mirror the reset
-        // here so simulation and real hardware behave identically.
-        simHeadingRadians = 0.0;
-        Rotation2d zero = new Rotation2d();
-        pose = new Pose2d(pose.getTranslation(), zero);
-        poseEstimator.resetPosition(zero, getModulePositions(), pose);
+        // Only the heading is known here, not the position, so this doesn't
+        // count as "pose set" (see hasPoseBeenSet).
+        setPoseEstimate(new Pose2d(getPose().getTranslation(), driverForward()));
     }
 
     /**
@@ -375,9 +441,14 @@ public final class Swerve extends Subsystem1507 {
      * @param pose the new known pose
      */
     public void resetPose(Pose2d pose) {
+        setPoseEstimate(pose);
+        poseSet = true;
+    }
+
+    private void setPoseEstimate(Pose2d pose) {
         this.pose = pose;
         poseEstimator.resetPosition(
-            getHeading(),
+            getGyroHeading(),
             getModulePositions(),
             pose
         );
@@ -389,8 +460,6 @@ public final class Swerve extends Subsystem1507 {
 
     /** Returns true if any drive motor is currently reporting a stall condition. */
     public boolean isAnyDriveStalled() {
-        if (edu.wpi.first.wpilibj.RobotBase.isSimulation()) return false;
-
         return frontLeft.isDriveStalled()
             || frontRight.isDriveStalled()
             || backLeft.isDriveStalled()
@@ -399,8 +468,6 @@ public final class Swerve extends Subsystem1507 {
 
     /** Returns true if any steer motor is currently reporting a stall condition. */
     public boolean isAnySteerStalled() {
-        if (edu.wpi.first.wpilibj.RobotBase.isSimulation()) return false;
-
         return frontLeft.isSteerStalled()
             || frontRight.isSteerStalled()
             || backLeft.isSteerStalled()
@@ -427,7 +494,7 @@ public final class Swerve extends Subsystem1507 {
      */
     private double computeOmega(Rotation2d current, Rotation2d desired) {
         double error = MathUtil.angleModulus(desired.minus(current).getRadians());
-        return MathUtil.clamp(error * HEADING_KP, -maxAngularMetersPerSecond, maxAngularMetersPerSecond);
+        return Math.clamp(error * HEADING_KP, -SwerveConfig.MAX_ANGULAR_RATE, SwerveConfig.MAX_ANGULAR_RATE);
     }
 
     /**
@@ -441,7 +508,7 @@ public final class Swerve extends Subsystem1507 {
         return new Rotation2d(Math.atan2(dy, dx));
     }
 
-    private SwerveModuleState[] getModuleStates() {
+    private SwerveModuleVelocity[] getModuleStates() {
         moduleStates[0] = frontLeft.getState();
         moduleStates[1] = frontRight.getState();
         moduleStates[2] = backLeft.getState();
@@ -458,17 +525,35 @@ public final class Swerve extends Subsystem1507 {
     }
 
     // ╔══════════════════════════════════════════════════════════════════╗
-    // ║                        COMMANDS                                  ║
+    // ║                        COMMANDS (Commands v3)                    ║
     // ║                                                                  ║
     // ║  All swerve commands live here, directly on the subsystem.       ║
-    // ║  They use run() / runOnce() / andThen() from SubsystemBase,      ║
-    // ║  which automatically registers this subsystem as a requirement.  ║
+    // ║  run(...) and runRepeatedly(...) come from Mechanism and make    ║
+    // ║  this subsystem the command's requirement automatically.         ║
+    // ║                                                                  ║
+    // ║  How a v3 command reads, top to bottom:                          ║
+    // ║                                                                  ║
+    // ║    return run(coroutine -> {                                     ║
+    // ║        // setup: runs once when the command starts               ║
+    // ║        while (!done()) {                                         ║
+    // ║            drive(...);          // runs every loop               ║
+    // ║            coroutine.yield();   // REQUIRED in every loop        ║
+    // ║        }                                                         ║
+    // ║        stop();                  // runs when it finishes         ║
+    // ║    })                                                            ║
+    // ║    .whenCanceled(this::stop)    // runs if it is interrupted     ║
+    // ║    .named("Swerve.myCommand");  // every command needs a name    ║
+    // ║                                                                  ║
+    // ║  Forgetting coroutine.yield() inside a loop freezes the whole    ║
+    // ║  robot program. For "do this every loop until interrupted",      ║
+    // ║  use runRepeatedly(() -> ...), which yields for you.             ║
     // ║                                                                  ║
     // ║  SECTIONS:                                                       ║
     // ║    1. Basic Drive (teleop)                                       ║
     // ║    2. Heading Control (pointing, aiming)                         ║
-    // ║    3. Autonomous Movement (driveToPoint, moveThroughPose, etc.)  ║
-    // ║    4. Utility (brake, resetPose)                                 ║
+    // ║    3. Autonomous Movement (driveForwardMeters; routes: see       ║
+    // ║       lib/core/auto/RouteRunner, used by AutoSequence)           ║
+    // ║    4. Utility (brake)                                            ║
     // ╚══════════════════════════════════════════════════════════════════╝
 
 
@@ -477,58 +562,77 @@ public final class Swerve extends Subsystem1507 {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Default teleop drive command.
-     * Accepts a ChassisSpeeds supplier so Robot.java can compute speeds
+     * What the drivetrain does when no other command is using it: stop the
+     * modules and hold. Robot.java sets this as the default command, and
+     * DriverTeleop replaces it with joystick driving while teleop is selected.
+     */
+    @Override
+    public Command idle() {
+        return run(coroutine -> {
+            stop();
+            coroutine.park(); // stay "running" (and stopped) until something else needs swerve
+        })
+        .withPriority(Command.LOWEST_PRIORITY)
+        .named("Swerve.idle");
+    }
+
+    /**
+     * Teleop drive command.
+     * Accepts a ChassisVelocities supplier so the OpMode can compute velocities
      * from controller inputs each loop iteration.
      *
-     *   swerve.setDefaultCommand(swerve.driveCommand(() -> computeSpeeds()));
+     *   swerve.setDefaultCommand(swerve.driveCommand(() -> computeVelocities()));
      */
-    public Command driveCommand(Supplier<ChassisSpeeds> speeds) {
-        return run(() -> drive(speeds.get()))
-            .finallyDo(interrupted -> stop())
-            .withName("Swerve.drive");
+    public Command driveCommand(Supplier<ChassisVelocities> velocities) {
+        return runRepeatedly(() -> drive(velocities.get()))
+            .whenCanceled(this::stop)
+            .named("Swerve.drive");
     }
 
     /**
-     * Drives at fixed ChassisSpeeds. Used by auto commands.
+     * Drives at fixed ChassisVelocities until interrupted. Used by auto commands.
      */
-    public Command driveCommand(ChassisSpeeds speeds) {
-        return run(() -> drive(speeds))
-            .finallyDo(interrupted -> stop())
-            .withName("Swerve.driveFixed");
+    public Command driveCommand(ChassisVelocities velocities) {
+        return runRepeatedly(() -> drive(velocities))
+            .whenCanceled(this::stop)
+            .named("Swerve.driveFixed");
     }
 
     /**
-     * Drives at the given ChassisSpeeds for a fixed number of seconds, then stops.
-     * Called by AutoBuilder.driveForTime().
+     * Drives at the given ChassisVelocities for a fixed number of seconds, then stops.
      */
-    public Command driveForTime(ChassisSpeeds speeds, double seconds) {
-        return run(() -> drive(speeds))
-            .withTimeout(seconds)
-            .finallyDo(interrupted -> stop())
-            .withName("Swerve.driveForTime");
+    public Command driveForTime(ChassisVelocities velocities, double seconds) {
+        return run(coroutine -> {
+            double endTime = Timer.getTimestamp() + seconds;
+            while (Timer.getTimestamp() < endTime) {
+                drive(velocities);
+                coroutine.yield();
+            }
+            stop();
+        })
+        .whenCanceled(this::stop)
+        .named("Swerve.driveForTime");
     }
 
-    /** Stops all modules. Instantaneous (runOnce). */
+    /** Stops all modules. Finishes immediately. */
     public Command stopCommand() {
-        return runOnce(this::stop)
-            .withName("Swerve.stop");
+        return run(coroutine -> stop())
+            .named("Swerve.stop");
     }
 
     /**
-     * Zeroes the gyro so the robot's current facing direction becomes field-forward (0°).
-     * Bind to a controller button (left bumper is standard) and press while the robot
-     * is physically pointing toward the opposing alliance wall.
+     * Tells the robot it is facing straight away from the driver (see zeroHeading()).
+     * Bound to the bottom face button in DriverTeleop.
      */
     public Command zeroHeadingCommand() {
-        return runOnce(this::zeroHeading)
-            .withName("Swerve.zeroHeading");
+        return run(coroutine -> zeroHeading())
+            .named("Swerve.zeroHeading");
     }
 
-    /** Resets the robot's pose estimate to a given field position. */
+    /** Resets the robot's pose estimate to a given field position. Finishes immediately. */
     public Command resetPoseCommand(Pose2d pose) {
-        return runOnce(() -> resetPose(pose))
-            .withName("Swerve.resetPose");
+        return run(coroutine -> resetPose(pose))
+            .named("Swerve.resetPose");
     }
 
 
@@ -536,64 +640,48 @@ public final class Swerve extends Subsystem1507 {
     // 2. HEADING CONTROL
     // ─────────────────────────────────────────────────────────────────
 
+    /** True when the robot's heading is within HEADING_TOLERANCE_DEG of the desired heading. */
+    private boolean isFacing(Rotation2d desired) {
+        return Math.abs(MathUtil.angleModulus(
+            getPose().getRotation().minus(desired).getRadians()
+        )) < Math.toRadians(HEADING_TOLERANCE_DEG);
+    }
+
     /**
      * Rotates the robot in place until it faces a fixed field position.
      *
      * The robot looks toward the XY of targetPose — the target's own rotation
-     * is ignored. Finishes within HEADING_TOLERANCE_DEG (5°).
+     * is ignored. Finishes within HEADING_TOLERANCE_DEG.
      *
      * Use case: snap to face the speaker/hub before shooting.
      *
      * @param targetPose  the field position to face toward
      */
     public Command pointToTarget(Pose2d targetPose) {
-        return run(() -> {
-            Pose2d current     = getPose();
-            Rotation2d desired = computeHeadingToTarget(current, targetPose);
-            drive(new ChassisSpeeds(0.0, 0.0,
-                computeOmega(current.getRotation(), desired)));
-        })
-        .until(() -> {
-            Pose2d current     = getPose();
-            Rotation2d desired = computeHeadingToTarget(current, targetPose);
-            return Math.abs(MathUtil.angleModulus(
-                current.getRotation().minus(desired).getRadians()
-            )) < Math.toRadians(HEADING_TOLERANCE_DEG);
-        })
-        .finallyDo(interrupted -> stop())
-        .withName("Swerve.pointToTarget");
+        return pointToTarget(() -> targetPose, "Swerve.pointToTarget");
     }
 
     /**
-     * Rotates the robot in place to continuously face a dynamic target.
+     * Rotates the robot in place to face a dynamic target.
      * The target pose is re-read from the supplier every loop.
+     * Finishes within HEADING_TOLERANCE_DEG.
      *
-     * Use case: continuously track a moving vision target or live shooter setpoint.
+     * Use case: track a moving vision target or live shooter setpoint.
      *
      * @param targetPoseSupplier  supplier that returns the current target pose
      */
     public Command pointToTarget(Supplier<Pose2d> targetPoseSupplier) {
-        return run(() -> {
-            Pose2d current     = getPose();
-            Rotation2d desired = computeHeadingToTarget(current, targetPoseSupplier.get());
-            drive(new ChassisSpeeds(0.0, 0.0,
-                computeOmega(current.getRotation(), desired)));
-        })
-        .until(() -> {
-            Pose2d current     = getPose();
-            Rotation2d desired = computeHeadingToTarget(current, targetPoseSupplier.get());
-            return Math.abs(MathUtil.angleModulus(
-                current.getRotation().minus(desired).getRadians()
-            )) < Math.toRadians(HEADING_TOLERANCE_DEG);
-        })
-        .finallyDo(interrupted -> stop())
-        .withName("Swerve.pointToTargetDynamic");
+        return pointToTarget(targetPoseSupplier, "Swerve.pointToTargetDynamic");
+    }
+
+    private Command pointToTarget(Supplier<Pose2d> targetPoseSupplier, String name) {
+        return turnToFace(() -> computeHeadingToTarget(getPose(), targetPoseSupplier.get()), name);
     }
 
     /**
      * Rotates the robot in place to match a specific heading in degrees.
      *
-     * Finishes within HEADING_TOLERANCE_DEG (5°).
+     * Finishes within HEADING_TOLERANCE_DEG.
      *
      * @param angleDeg  desired heading in degrees (e.g. 90 = left, 180 = backwards)
      */
@@ -606,24 +694,14 @@ public final class Swerve extends Subsystem1507 {
      *
      * Differs from pointToTarget: this snaps to a specific angle,
      * not a direction toward a field location. Useful for correcting heading
-     * drift after moveThroughPose, or for aligning with a wall.
+     * drift, or for aligning with a wall.
      *
-     * Finishes within HEADING_TOLERANCE_DEG (5°).
+     * Finishes within HEADING_TOLERANCE_DEG.
      *
      * @param targetHeading  the desired heading
      */
     public Command changeHeading(Rotation2d targetHeading) {
-        return run(() -> {
-            double omega = computeOmega(getPose().getRotation(), targetHeading);
-            drive(new ChassisSpeeds(0.0, 0.0, omega));
-        })
-        .until(() ->
-            Math.abs(MathUtil.angleModulus(
-                getPose().getRotation().minus(targetHeading).getRadians()
-            )) < Math.toRadians(HEADING_TOLERANCE_DEG)
-        )
-        .finallyDo(interrupted -> stop())
-        .withName("Swerve.changeHeading");
+        return turnToFace(() -> targetHeading, "Swerve.changeHeading");
     }
 
     /**
@@ -640,7 +718,7 @@ public final class Swerve extends Subsystem1507 {
      * Drives with driver-supplied translation while automatically aiming at a target.
      *
      * Includes motion compensation — the aim leads the robot's velocity so projectiles
-     * arrive correctly even while moving. Tune AIM_LEAD_TIME at the top of this file.
+     * arrive correctly even while moving. Tune AIM_LEAD_TIME in Constants.kSwerve.kTuning.
      *
      * This command NEVER finishes on its own. Bind with whileTrue() so it cancels
      * when the button is released, returning control to the default drive command.
@@ -648,18 +726,18 @@ public final class Swerve extends Subsystem1507 {
      * Use case: driver holds a button to auto-aim while keeping full translation control.
      *
      * @param targetPoseSupplier  field target to aim at (re-read every loop)
-     * @param xSupplier           driver forward/back input (m/s, field-relative)
-     * @param ySupplier           driver strafe input (m/s, field-relative)
+     * @param xSupplier           driver forward/back input (m/s, driver-relative: + = away from driver)
+     * @param ySupplier           driver strafe input (m/s, driver-relative: + = driver's left)
      */
     public Command maintainHeadingToTarget(
         Supplier<Pose2d> targetPoseSupplier,
         Supplier<Double> xSupplier,
         Supplier<Double> ySupplier
     ) {
-        return run(() -> {
+        return runRepeatedly(() -> {
             Pose2d currentPose  = getPose();
             Pose2d targetPose   = targetPoseSupplier.get();
-            ChassisSpeeds field = getFieldRelativeSpeeds();
+            ChassisVelocities field = getFieldRelativeSpeeds();
 
             // Shift the aim point forward in time to compensate for robot motion.
             // If the robot moves right at 2 m/s and lead time is 0.25 s,
@@ -667,24 +745,28 @@ public final class Swerve extends Subsystem1507 {
             // the time the game piece takes to travel to the target.
             Translation2d compensated = targetPose.getTranslation().minus(
                 new Translation2d(
-                    field.vxMetersPerSecond * AIM_LEAD_TIME,
-                    field.vyMetersPerSecond * AIM_LEAD_TIME
+                    field.vx * AIM_LEAD_TIME,
+                    field.vy * AIM_LEAD_TIME
                 )
             );
 
             Rotation2d desiredHeading = compensated
                 .minus(currentPose.getTranslation())
-                .getAngle();
+                .getAngle()
+                // 2027: getAngle() is empty for a zero-length vector (robot exactly
+                // on the target). Keep the current heading in that case.
+                .orElse(currentPose.getRotation());
 
             double omega = computeOmega(currentPose.getRotation(), desiredHeading);
-            // xSupplier / ySupplier are field-relative — convert to robot-relative
-            // before passing to drive() so translation is correct at any heading.
-            drive(ChassisSpeeds.fromFieldRelativeSpeeds(
-                xSupplier.get(), ySupplier.get(), omega, currentPose.getRotation()
-            ));
+            // xSupplier / ySupplier are driver-relative — convert to robot-relative
+            // before passing to drive() so translation is correct at any heading,
+            // on either alliance.
+            drive(new ChassisVelocities(
+                xSupplier.get(), ySupplier.get(), omega
+            ).toRobotRelative(getDriverRelativeHeading()));
         })
-        .finallyDo(interrupted -> stop())
-        .withName("Swerve.maintainHeadingToTarget");
+        .whenCanceled(this::stop)
+        .named("Swerve.maintainHeadingToTarget");
     }
 
 
@@ -693,218 +775,128 @@ public final class Swerve extends Subsystem1507 {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Drives toward a target pose at a fixed velocity and stops when within
-     * ARRIVE_THRESHOLD (5 cm) of the target XY.
-     *
-     * Rotation toward the target pose's heading is corrected proportionally
-     * throughout the move.
-     *
-     * @param targetPose  the field pose to drive to
-     * @param velocity    translation speed (m/s)
-     * @param stopAtEnd   true = stop when done; false = leave velocity applied (for chaining)
-     */
-    public Command driveToPoint(Pose2d targetPose, double velocity, boolean stopAtEnd) {
-        // stall[0,1] = last XY where movement was detected; stall[2] = timestamp
-        final double[] stall = new double[3];
-
-        return runOnce(() -> {
-            Pose2d p = getPose();
-            stall[0] = p.getX();
-            stall[1] = p.getY();
-            stall[2] = Timer.getFPGATimestamp();
-        })
-        .andThen(run(() -> {
-            Pose2d current     = getPose();
-            Rotation2d heading = current.getRotation();
-
-            double dx       = targetPose.getX() - current.getX();
-            double dy       = targetPose.getY() - current.getY();
-            double distance = Math.hypot(dx, dy);
-
-            double apfSpeed = Math.min(ARRIVE_KP * distance, velocity);
-            double ux = (distance > ARRIVE_THRESHOLD) ? dx / distance : 0.0;
-            double uy = (distance > ARRIVE_THRESHOLD) ? dy / distance : 0.0;
-
-            driveRobotRelative(ChassisSpeeds.fromFieldRelativeSpeeds(
-                ux * apfSpeed, uy * apfSpeed,
-                computeOmega(heading, targetPose.getRotation()),
-                heading
-            ));
-
-            // Advance stall checkpoint whenever the robot makes meaningful progress
-            double moveDx = Math.abs(current.getX() - stall[0]);
-            double moveDy = Math.abs(current.getY() - stall[1]);
-            if (moveDx > STALL_THRESHOLD || moveDy > STALL_THRESHOLD) {
-                stall[0] = current.getX();
-                stall[1] = current.getY();
-                stall[2] = Timer.getFPGATimestamp();
-            }
-        }))
-        .until(() -> {
-            Pose2d current = getPose();
-            if (current.getTranslation().getDistance(targetPose.getTranslation()) < ARRIVE_THRESHOLD)
-                return true;
-            double dx = Math.abs(current.getX() - stall[0]);
-            double dy = Math.abs(current.getY() - stall[1]);
-            return dx < STALL_THRESHOLD
-                && dy < STALL_THRESHOLD
-                && (Timer.getFPGATimestamp() - stall[2]) > STALL_TIMEOUT;
-        })
-        .finallyDo(interrupted -> { if (stopAtEnd) stop(); })
-        .withName("Swerve.driveToPoint");
-    }
-
-    /**
-     * Drives through a waypoint at constant speed without slowing down.
-     *
-     * Unlike driveToPoint, the command finishes as soon as the robot enters the
-     * pass radius — there is no deceleration. This allows smooth, high-speed
-     * paths through multiple chained waypoints.
-     *
-     * Rotation is controlled by a PID toward the target pose's heading.
-     * Tune THETA_KP / KI / KD and MOVE_THROUGH_DEFAULT_RADIUS at the top of this file.
-     *
-     * Stall detection prevents the robot from getting permanently stuck if
-     * it hits an obstacle — the command auto-exits after STALL_TIMEOUT seconds
-     * of insufficient movement.
-     *
-     * @param targetPose  the waypoint pose to pass through
-     * @param maxSpeed    translation speed (m/s)
-     * @param maxAngular  maximum rotation speed (rad/s), clamps PID output
-     * @param passRadius  distance to consider the waypoint "passed" (meters)
-     */
-    @SuppressWarnings("resource")
-    public Command moveThroughPose(
-        Pose2d targetPose,
-        double maxSpeed,
-        double maxAngular,
-        double passRadius
-    ) {
-        PIDController thetaPID = new PIDController(THETA_KP, THETA_KI, THETA_KD);
-        thetaPID.enableContinuousInput(-Math.PI, Math.PI);
-
-        // stall[0,1] = last XY where movement was detected; stall[2] = stall timestamp; stall[3] = command start
-        final double[] stall = new double[4];
-
-        return runOnce(() -> {
-            Pose2d p = getPose();
-            stall[0] = p.getX();
-            stall[1] = p.getY();
-            stall[2] = Timer.getFPGATimestamp();
-            stall[3] = stall[2]; // wall-clock start for hard deadline
-            thetaPID.reset();
-        })
-        .andThen(run(() -> {
-            Pose2d current = getPose();
-
-            // Normalized direction vector toward waypoint
-            double dx       = targetPose.getX() - current.getX();
-            double dy       = targetPose.getY() - current.getY();
-            double distance = Math.hypot(dx, dy);
-            double dirX     = dx / (distance + 1e-9);
-            double dirY     = dy / (distance + 1e-9);
-
-            // PID rotation toward target heading, clamped to maxAngular
-            double omega = MathUtil.clamp(
-                thetaPID.calculate(
-                    current.getRotation().getRadians(),
-                    targetPose.getRotation().getRadians()
-                ),
-                -maxAngular, maxAngular
-            );
-
-            driveRobotRelative(ChassisSpeeds.fromFieldRelativeSpeeds(
-                dirX * maxSpeed, dirY * maxSpeed, omega, current.getRotation()
-            ));
-
-            // Update stall tracker if the robot is actually moving
-            double moveDx = Math.abs(current.getX() - stall[0]);
-            double moveDy = Math.abs(current.getY() - stall[1]);
-            if (moveDx > STALL_THRESHOLD || moveDy > STALL_THRESHOLD) {
-                stall[0] = current.getX();
-                stall[1] = current.getY();
-                stall[2] = Timer.getFPGATimestamp();
-            }
-        }))
-        .until(() -> {
-            Pose2d current = getPose();
-
-            // Done: robot entered pass radius
-            if (current.getTranslation().getDistance(targetPose.getTranslation()) < passRadius)
-                return true;
-
-            // Done: stall timeout expired (robot not moving)
-            double dx = Math.abs(current.getX() - stall[0]);
-            double dy = Math.abs(current.getY() - stall[1]);
-            if (dx < STALL_THRESHOLD && dy < STALL_THRESHOLD
-                    && (Timer.getFPGATimestamp() - stall[2]) > STALL_TIMEOUT)
-                return true;
-
-            // Done: hard wall-clock deadline — catches oscillation that keeps resetting the stall timer
-            return (Timer.getFPGATimestamp() - stall[3]) > MAX_MOVETHROUGH_SECONDS;
-        })
-        .finallyDo(interrupted -> stop())
-        .withName("Swerve.moveThroughPose");
-    }
-
-    /**
-     * Convenience overload of moveThroughPose using the default pass radius.
-     * Use this when you don't need to tune the radius per waypoint.
-     */
-    public Command moveThroughPose(Pose2d targetPose, double maxSpeed, double maxAngular) {
-        return moveThroughPose(targetPose, maxSpeed, maxAngular, MOVE_THROUGH_DEFAULT_RADIUS);
-    }
-
-    /**
      * Drives forward a fixed distance along the robot's current heading.
      *
-     * The target pose is computed from the robot's starting position and heading
-     * at the moment the command initializes. Heading is held with proportional
-     * correction throughout. Finishes within ARRIVE_THRESHOLD (5 cm).
+     * The target is computed from the robot's position and heading at the moment
+     * the command starts. Heading is held with proportional correction throughout.
+     * Finishes within ARRIVE_THRESHOLD (5 cm).
      *
-     * Use case: fallback auto when vision is offline — just drive a known distance.
+     * Use case: creeping into a wall or station by a known amount (the 2026
+     * human player auto), or a fallback auto when vision is offline.
+     *
+     * Gives up if the robot stops making progress (see ProgressWatchdog).
      *
      * @param distanceMeters  distance to drive (meters, positive = forward)
-     * @param velocity        translation speed (m/s)
+     * @param velocity        cruise translation speed (m/s)
      * @param stopAtEnd       true = stop when done
      */
     public Command driveForwardMeters(double distanceMeters, double velocity, boolean stopAtEnd) {
-        // Single-element array so the target pose computed in runOnce is accessible
-        // in the run() and until() closures without subsystem-level mutable state.
-        final Pose2d[] target = { new Pose2d() };
+        return driveToTarget(start -> {
+            Rotation2d heading = start.getRotation();
+            Translation2d offset = new Translation2d(
+                distanceMeters * heading.getCos(), distanceMeters * heading.getSin());
+            return new Pose2d(start.getTranslation().plus(offset), heading);
+        }, velocity, stopAtEnd, "Swerve.driveForwardMeters");
+    }
 
-        return runOnce(() -> {
-            Pose2d current = getPose();
-            Rotation2d hdg = current.getRotation();
-            target[0] = new Pose2d(
-                current.getX() + distanceMeters * hdg.getCos(),
-                current.getY() + distanceMeters * hdg.getSin(),
-                hdg
-            );
+
+    // ─────────────────────────────────────────────────────────────────
+    // SHARED COMMAND BUILDING BLOCKS
+    //
+    // Private helpers used by the commands above, so each piece of logic
+    // exists in exactly one place.
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Turns in place until the robot faces {@code desiredHeading} (re-read
+     * every loop), within HEADING_TOLERANCE_DEG, then stops. Gives up after
+     * MAX_TURN_SECONDS (robot pinned, wheels slipping), so an auto can't stall here.
+     * Used by pointToTarget and changeHeading.
+     */
+    private Command turnToFace(Supplier<Rotation2d> desiredHeading, String name) {
+        return run(coroutine -> {
+            double start = Timer.getTimestamp();
+            Rotation2d desired = desiredHeading.get();
+            while (!isFacing(desired) && Timer.getTimestamp() - start < MAX_TURN_SECONDS) {
+                drive(new ChassisVelocities(0.0, 0.0, computeOmega(getPose().getRotation(), desired)));
+                coroutine.yield();
+                desired = desiredHeading.get();
+            }
+            stop();
         })
-        .andThen(run(() -> {
-            Pose2d current = getPose();
-            Rotation2d hdg = current.getRotation();
+        .whenCanceled(this::stop)
+        .named(name);
+    }
 
-            double dx       = target[0].getX() - current.getX();
-            double dy       = target[0].getY() - current.getY();
-            double distance = Math.hypot(dx, dy);
+    /**
+     * Drives to a target pose, slowing down as it gets close
+     * (speed = ARRIVE_KP × distance) while turning toward the target's heading.
+     * Finishes within ARRIVE_THRESHOLD, or gives up if the robot stops making
+     * progress (see {@link ProgressWatchdog}) so an auto can continue.
+     * Used by driveForwardMeters.
+     *
+     * @param targetFromStart works out the target from the robot's pose when the
+     *                        command STARTS (driveForwardMeters needs this)
+     */
+    private Command driveToTarget(
+        Function<Pose2d, Pose2d> targetFromStart, double velocity, boolean stopAtEnd, String name
+    ) {
+        return run(coroutine -> {
+            Pose2d target = targetFromStart.apply(getPose());
+            ProgressWatchdog watchdog = new ProgressWatchdog(getPose().getTranslation());
 
-            double apfSpeed = Math.min(ARRIVE_KP * distance, velocity);
-            double ux = (distance > ARRIVE_THRESHOLD) ? dx / distance : 0.0;
-            double uy = (distance > ARRIVE_THRESHOLD) ? dy / distance : 0.0;
+            while (true) {
+                Pose2d current = getPose();
+                Translation2d toTarget = target.getTranslation().minus(current.getTranslation());
+                double distance = toTarget.getNorm();
 
-            driveRobotRelative(ChassisSpeeds.fromFieldRelativeSpeeds(
-                ux * apfSpeed, uy * apfSpeed,
-                computeOmega(hdg, target[0].getRotation()),
-                hdg
-            ));
-        }))
-        .until(() ->
-            getPose().getTranslation().getDistance(target[0].getTranslation()) < ARRIVE_THRESHOLD
-        )
-        .finallyDo(interrupted -> { if (stopAtEnd) stop(); })
-        .withName("Swerve.driveForwardMeters");
+                // Done: arrived, or stalled (pushed against a wall, stuck on something)
+                if (distance < ARRIVE_THRESHOLD || watchdog.isStalled(current.getTranslation())) {
+                    break;
+                }
+
+                // Drive toward the target, slowing down as it gets close
+                double speed = Math.min(ARRIVE_KP * distance, velocity);
+                drive(new ChassisVelocities(
+                    toTarget.getX() / distance * speed,
+                    toTarget.getY() / distance * speed,
+                    computeOmega(current.getRotation(), target.getRotation())
+                ).toRobotRelative(current.getRotation()));
+
+                coroutine.yield();
+            }
+
+            if (stopAtEnd) stop();
+        })
+        .whenCanceled(() -> { if (stopAtEnd) stop(); })
+        .named(name);
+    }
+
+    /**
+     * Tells a driving command when the robot has stopped making progress:
+     * it moved less than STALL_THRESHOLD meters in the last STALL_TIMEOUT
+     * seconds (pushed against a wall, stuck on a game piece). Each command
+     * run creates its own watchdog when it starts.
+     */
+    private static final class ProgressWatchdog {
+        private Translation2d lastProgressPoint;
+        private double lastProgressTime;
+
+        ProgressWatchdog(Translation2d start) {
+            lastProgressPoint = start;
+            lastProgressTime = Timer.getTimestamp();
+        }
+
+        /** Call once per loop with the robot's position; true once it has stalled. */
+        boolean isStalled(Translation2d position) {
+            double now = Timer.getTimestamp();
+            if (position.getDistance(lastProgressPoint) > STALL_THRESHOLD) {
+                lastProgressPoint = position;
+                lastProgressTime = now;
+                return false;
+            }
+            return now - lastProgressTime > STALL_TIMEOUT;
+        }
     }
 
 
@@ -924,8 +916,8 @@ public final class Swerve extends Subsystem1507 {
      * Use case: hold position while shooting, resist defense, stay on a slope.
      */
     public Command brakeCommand() {
-        return run(this::brake)
-            .finallyDo(interrupted -> stop())
-            .withName("Swerve.brake");
+        return runRepeatedly(this::brake)
+            .whenCanceled(this::stop)
+            .named("Swerve.brake");
     }
 }

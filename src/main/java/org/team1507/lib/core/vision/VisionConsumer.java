@@ -8,10 +8,10 @@
 
 package org.team1507.lib.core.vision;
 
-import edu.wpi.first.math.Matrix;
-import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.numbers.N1;
-import edu.wpi.first.math.numbers.N3;
+import org.wpilib.math.linalg.Matrix;
+import org.wpilib.math.geometry.Pose2d;
+import org.wpilib.math.numbers.N1;
+import org.wpilib.math.numbers.N3;
 
 /**
  * Callback interface for feeding a vision-estimated pose into a drivetrain's
@@ -31,7 +31,7 @@ public interface VisionConsumer {
      * pose estimator with a confidence weight.
      *
      * @param pose              estimated robot pose on the field (meters, radians)
-     * @param timestampSeconds  FPGA timestamp when the measurement was captured
+     * @param timestampSeconds  robot timestamp (Timer.getTimestamp()) when the measurement was captured
      * @param stdDevs           measurement confidence [x (m), y (m), heading (rad)]
      *                          — lower values = trust vision more
      */

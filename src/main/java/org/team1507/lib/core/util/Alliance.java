@@ -8,7 +8,7 @@
 
 package org.team1507.lib.core.util;
 
-import edu.wpi.first.wpilibj.DriverStation;
+import org.wpilib.driverstation.MatchState;
 
 /**
  * Alliance-color utilities for runtime alliance detection.
@@ -23,7 +23,7 @@ import edu.wpi.first.wpilibj.DriverStation;
  * as if it is on Blue alliance. To test Red-alliance behavior without a field,
  * set the alliance color in the DriverStation application before enabling.
  *
- * @see edu.wpi.first.wpilibj.DriverStation#getAlliance()
+ * @see org.wpilib.driverstation.MatchState#getAlliance()
  */
 public final class Alliance {
 
@@ -41,7 +41,8 @@ public final class Alliance {
      * @return {@code true} if Red alliance; {@code false} if Blue or unknown
      */
     public static boolean isRed() {
-        return DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue)
-            == DriverStation.Alliance.Red;
+        // Fully qualified: this class is also named Alliance.
+        return MatchState.getAlliance().orElse(org.wpilib.driverstation.Alliance.BLUE)
+            == org.wpilib.driverstation.Alliance.RED;
     }
 }

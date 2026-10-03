@@ -1,38 +1,32 @@
 # 1507Labs
 
-**1507Labs** is the experimental robot codebase for [Team 1507 – Warlocks](https://warlocks1507.com). It is a sandbox for prototyping new systems before they graduate into the production [1507Base](https://github.com/Team1507/1507Base) codebase.
+**1507Labs** is the experimental robot codebase for [Team 1507 – Warlocks](https://warlocks1507.com): a sandbox for proving new systems before they move into the production [1507Base](https://github.com/Team1507/1507Base) skeleton.
 
-See [EXPERIMENTS_OVERVIEW.txt](EXPERIMENTS_OVERVIEW.txt) for a full catalogue of what has been built here and the prioritization plan for moving features into production.
+## This branch: `SystemCore` (WPILib 2027)
 
-## Active Experiments
+This branch starts as an exact copy of **1507Base's `SystemCore` branch** (commit `c52be20`, 2026-10-03): WPILib 2027 alpha 7, Commands v3, the 2027 swerve, logging and auto route framework. Experiments are added on top of it.
 
-| System | Subsystem/Package | Description |
-|---|---|---|
-| Policy Assist | `subsystems/PolicyAssist.java` | RL teleop-assist policy via NetworkTables bridge |
-| Shooter | `subsystems/Shooter.java` | Flywheel shooter with PID tuner integration |
-| Swerve | `subsystems/Swerve.java` | Swerve drivetrain with vision fusion support |
+- Open it with **WPILib 2027 VS Code** (alpha 7). The 2026 VS Code can't build it.
+- The 2026 experiments (Policy Assist over NetworkTables, the Shooter and ShooterModel, PathPlanner, AdvantageKit) are on the `main` and `docs/add-readme` branches. They use 2026 APIs and need porting before they run here.
+- See the 1507Base wiki for how the base works, and its **Future Plans** page for the ideas queued for Labs.
 
-## Structure
+## Planned experiments
 
+| Experiment | Notes |
+|---|---|
+| **Policy driver** | Run the trained path policy (Swerve-Policy-Playground) in Java on SystemCore, for autos written with `new AutoSequence(Driver.POLICY)`. Plan: [docs/2027-auto-plan.md](docs/2027-auto-plan.md), sections 5 and 7 |
+| **Auto path tester** | Run every auto in the simulator and fail on a collision, leaving the field, and similar problems |
+| **Better simulation** | CTRE motor simulation plus a simulated battery (current draw, voltage sag) |
+
+When an experiment is proven, it moves into 1507Base, and fixes found in either repo are applied to both.
+
+## Building
+
+```bash
+./gradlew build          # compiles and runs every test
+./gradlew simulateJava   # robot simulator (use the Sim GUI; don't also run the Driver Station app)
 ```
-src/main/java/org/team1507/
-  robot/
-    Constants.java        Tunable parameters
-    Robot.java            WPILib Robot entry point
-    RobotBehaviors.java   Input bindings
-    auto/                 Autonomous routines
-    subsystems/           Active experiment subsystems
-  lib/
-    core/                 Shared utilities shared with 1507Base
-```
 
-## Setup
+## Background
 
-1. Install [WPILib 2026](https://docs.wpilib.org/en/stable/docs/zero-to-robot/step-2/wpilib-setup.html)
-2. Open in VS Code with the WPILib extension
-3. Simulate: `./gradlew simulateJava`
-4. Build: `./gradlew build`
-
-## License
-
-Uses WPILib components — see [WPILib-License.md](WPILib-License.md).
+[EXPERIMENTS_OVERVIEW.txt](EXPERIMENTS_OVERVIEW.txt) catalogues the 2026 experiments.

@@ -8,242 +8,117 @@
 
 package org.team1507.robot;
 
-import static edu.wpi.first.units.Units.Amps;
-import static edu.wpi.first.units.Units.Inches;
-import static edu.wpi.first.units.Units.MetersPerSecond;
-
-import org.team1507.lib.core.util.MotorConfig;
-import org.team1507.lib.core.util.MotorConfig.ControlMode;
-
 import com.ctre.phoenix6.CANBus;
-import com.ctre.phoenix6.signals.FeedbackSensorSourceValue;
+import org.wpilib.hardware.bus.CANPort;
 
-import edu.wpi.first.math.Matrix;
-import edu.wpi.first.math.VecBuilder;
-import edu.wpi.first.math.geometry.Rotation3d;
-import edu.wpi.first.math.geometry.Transform3d;
-import edu.wpi.first.math.geometry.Translation2d;
-import edu.wpi.first.math.numbers.N1;
-import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.units.measure.Current;
-import edu.wpi.first.units.measure.LinearVelocity;
+import org.wpilib.math.linalg.Matrix;
+import org.wpilib.math.linalg.VecBuilder;
+import org.wpilib.math.geometry.Rotation3d;
+import org.wpilib.math.geometry.Transform3d;
+import org.wpilib.math.numbers.N1;
+import org.wpilib.math.numbers.N3;
 
 public class Constants {
 
     // ============================================================
-    // CAN Bus — change "canivore" to your CANivore's name if used.
-    // All TalonFX, CANcoder, and Pigeon2 devices must share a bus.
+    // CAN Bus — SystemCore has five CAN ports (CAN_S0 .. CAN_S4).
+    // Every CTRE device must be told which bus it is on.
+    // CAN_S0 replaces the roboRIO's single built-in "rio" bus.
+    // If a CANivore is used, create it with new CANBus("canivore")
+    // and pass that bus to the devices wired to it.
     // ============================================================
 
-    public static final CANBus CAN_BUS    = new CANBus("rio");
-    public static final CANBus SWERVE_BUS = new CANBus("canivore");
+    // TODO(SEASON SWERVE-2): confirm which SystemCore port the drivetrain is wired to.
+    public static final CANBus CAN_BUS = new CANBus(CANPort.CAN_S0);
+
+    // The power distribution hub (PDH). Its per-channel currents are logged
+    // every loop, to trace brownouts to the mechanism that caused them. It must
+    // keep its default CAN ID (1).
+    // TODO(SEASON LOGGING-1): confirm which SystemCore port the PDH is wired to.
+    public static final CANPort PDH_CAN_PORT = CANPort.CAN_S0;
 
     // ============================================================
-    // Hardware Map — all CAN IDs and sensor offsets in one place.
-    // Update whenever a motor or encoder is replaced or renumbered.
+    // Hardware Map — CAN IDs and ports for everything EXCEPT the
+    // drivetrain (see below). Update whenever a device is replaced
+    // or renumbered.
     // ============================================================
 
     public static final class RobotMap {
 
-        // Front Left module
-        public static final int FL_DRIVE   = 7;
-        public static final int FL_STEER   = 8;
-        public static final int FL_ENCODER = 9;
-        /** Rotations to align the front-left wheel to straight forward. */
-        public static final double FL_ENCODER_OFFSET = 0.129150390625;
-
-        // Front Right module
-        public static final int FR_DRIVE   = 1;
-        public static final int FR_STEER   = 2;
-        public static final int FR_ENCODER = 3;
-        /** Rotations to align the front-right wheel to straight forward. */
-        public static final double FR_ENCODER_OFFSET = -0.28515625;
-
-        // Back Left module
-        public static final int BL_DRIVE   = 4;
-        public static final int BL_STEER   = 5;
-        public static final int BL_ENCODER = 6;
-        /** Rotations to align the back-left wheel to straight forward. */
-        public static final double BL_ENCODER_OFFSET = -0.436767578125;
-
-        // Back Right module
-        public static final int BR_DRIVE   = 10;
-        public static final int BR_STEER   = 11;
-        public static final int BR_ENCODER = 12;
-        /** Rotations to align the back-right wheel to straight forward. */
-        public static final double BR_ENCODER_OFFSET = 0.138671875;
-
-        // Gyro
-        public static final int PIGEON2 = 30;
+        // Drivetrain CAN IDs, CANcoder offsets, and the Pigeon2 ID live in the
+        // Tuner X paste zone at the top of subsystems/SwerveConfig.java, so they can be
+        // pasted straight from Tuner X's generated TunerConstants.java.
+        // Keep every OTHER device's CAN ID here, and check for collisions with
+        // the drivetrain IDs (1-12, Pigeon2 = 30) when adding one.
 
         // Driver Station USB ports
         public static final int DRIVER_CONTROLLER   = 0;
         public static final int OPERATOR_CONTROLLER = 1;
-
-        // Shooter
-        public static final int SHOOTER_BLU     = 19;
-        public static final int SHOOTER_YEL     = 17;
-        public static final int SHOOTER_BLU_DIO = 6;
-        public static final int SHOOTER_YEL_DIO = 7;
     }
 
     // ============================================================
-    // Swerve Drive — kinematics, motor configs, and tuning.
+    // Swerve Drive tuning: knobs adjusted while tuning or at events.
+    //
+    // Swerve HARDWARE facts (gear ratios, wheel size, motor gains, current
+    // limits) live in subsystems/SwerveConfig.java. They only change when the
+    // hardware changes, and they are pasted from Tuner X.
     // ============================================================
 
     public static final class kSwerve {
 
-        // Theoretical free speed at 12 V — tune to your actual robot.
-        public static final LinearVelocity SPEED_AT_12_VOLTS = MetersPerSecond.of(5.04);
-
-        /** Maximum translational speed (m/s). */
-        public static final double MAX_SPEED = SPEED_AT_12_VOLTS.magnitude();
-
-        // Gear ratios and wheel geometry
-        public static final double COUPLE_RATIO        = 3.5714285714285716;
-        public static final double DRIVE_GEAR_RATIO    = 6.122448979591837;
-        public static final double STEER_GEAR_RATIO    = 21.428571428571427;
-        public static final double WHEEL_RADIUS_METERS = 0.049581;
-
-        // Scale factor applied to drive motor output (in meters). Do not set to zero.
-        public static final double DRIVE_METERS_SCALE = 1.0;
-
-        // Steer stator limit — low torque requirement lets us protect against brownouts.
-        private static final Current STEER_STATOR_CURRENT = Amps.of(60);
-
-        // Pose estimator standard deviations [x (m), y (m), heading (rad)].
-        // Lower = trust that source more.
-        public static final Matrix<N3, N1> ODOMETRY_STD_DEV = VecBuilder.fill(0.02, 0.02, 0.05);
-        public static final Matrix<N3, N1> VISION_STD_DEV   = VecBuilder.fill(0.02, 0.02, 0.05);
-
-        // Module positions relative to robot center (WPILib: +X forward, +Y left).
-        public static final Translation2d FRONT_LEFT_LOCATION  = new Translation2d(Inches.of( 10.7375), Inches.of( 10.7375));
-        public static final Translation2d FRONT_RIGHT_LOCATION = new Translation2d(Inches.of( 10.7375), Inches.of(-10.7375));
-        public static final Translation2d BACK_LEFT_LOCATION   = new Translation2d(Inches.of(-10.7375), Inches.of( 10.7375));
-        public static final Translation2d BACK_RIGHT_LOCATION  = new Translation2d(Inches.of(-10.7375), Inches.of(-10.7375));
-
-        /**
-         * Maximum chassis angular rate (rad/s) = v_max / drive_radius.
-         * At 5.04 m/s with modules at ±10.7375" on both axes: ~13.1 rad/s.
-         */
-        public static final double MAX_ANGULAR_RATE =
-            MAX_SPEED / FRONT_LEFT_LOCATION.getNorm();
-
-        // -- Motor Configs -----------------------------------------------
-
-        public static final MotorConfig FRONT_LEFT_DRIVE_CONFIG =
-            MotorConfig.builder(ControlMode.VELOCITY)
-                .inverted(false)
-                .withPID(2.0, 0.0, 0.0)
-                .withFeedforward(0.12, 2.75, 0.32)
-                .build();
-        public static final MotorConfig FRONT_LEFT_STEER_CONFIG =
-            MotorConfig.builder(ControlMode.POSITION)
-                .inverted(true)
-                .withPID(70, 0, 0.2)
-                .withFeedforward(0.08, 2.2, 0.0)
-                .withStatorCurrentLimit(STEER_STATOR_CURRENT)
-                .withFeedbackSensor(FeedbackSensorSourceValue.RemoteCANcoder)
-                .withRemoteSensorId(RobotMap.FL_ENCODER)
-                .withSensorToMechanismRatio(1.0)
-                .withContinuousWrap()
-                .build();
-
-        public static final MotorConfig FRONT_RIGHT_DRIVE_CONFIG =
-            MotorConfig.builder(ControlMode.VELOCITY)
-                .inverted(true)
-                .withPID(2.0, 0.0, 0.0)
-                .withFeedforward(0.12, 2.75, 0.32)
-                .build();
-        public static final MotorConfig FRONT_RIGHT_STEER_CONFIG =
-            MotorConfig.builder(ControlMode.POSITION)
-                .inverted(true)
-                .withPID(70, 0, 0.2)
-                .withFeedforward(0.08, 2.2, 0.0)
-                .withStatorCurrentLimit(STEER_STATOR_CURRENT)
-                .withFeedbackSensor(FeedbackSensorSourceValue.RemoteCANcoder)
-                .withRemoteSensorId(RobotMap.FR_ENCODER)
-                .withSensorToMechanismRatio(1.0)
-                .withContinuousWrap()
-                .build();
-
-        public static final MotorConfig BACK_LEFT_DRIVE_CONFIG =
-            MotorConfig.builder(ControlMode.VELOCITY)
-                .inverted(false)
-                .withPID(2.0, 0.0, 0.0)
-                .withFeedforward(0.12, 2.75, 0.32)
-                .build();
-        public static final MotorConfig BACK_LEFT_STEER_CONFIG =
-            MotorConfig.builder(ControlMode.POSITION)
-                .inverted(true)
-                .withPID(70, 0, 0.2)
-                .withFeedforward(0.08, 2.2, 0.0)
-                .withStatorCurrentLimit(STEER_STATOR_CURRENT)
-                .withFeedbackSensor(FeedbackSensorSourceValue.RemoteCANcoder)
-                .withRemoteSensorId(RobotMap.BL_ENCODER)
-                .withSensorToMechanismRatio(1.0)
-                .withContinuousWrap()
-                .build();
-
-        public static final MotorConfig BACK_RIGHT_DRIVE_CONFIG =
-            MotorConfig.builder(ControlMode.VELOCITY)
-                .inverted(true)
-                .withPID(2.0, 0.0, 0.0)
-                .withFeedforward(0.12, 2.75, 0.32)
-                .build();
-        public static final MotorConfig BACK_RIGHT_STEER_CONFIG =
-            MotorConfig.builder(ControlMode.POSITION)
-                .inverted(true)
-                .withPID(70, 0, 0.2)
-                .withFeedforward(0.08, 2.2, 0.0)
-                .withStatorCurrentLimit(STEER_STATOR_CURRENT)
-                .withFeedbackSensor(FeedbackSensorSourceValue.RemoteCANcoder)
-                .withRemoteSensorId(RobotMap.BR_ENCODER)
-                .withSensorToMechanismRatio(1.0)
-                .withContinuousWrap()
-                .build();
-
-        // -- Command Tuning ----------------------------------------------
-
+        // TODO(SEASON SWERVE-9): retune these once the robot drives (heading control,
+        // auto arrival thresholds, pose-estimator trust, wheel-wear scale).
         public static final class kTuning {
 
-            /** Proportional gain for simple heading control (rad/s per radian of error). */
+            /** Joystick deadband for teleop driving: stick input below this counts as zero. */
+            public static final double DRIVER_DEADBAND = 0.12;
+
+            /** Teleop rotation speed at full right-stick (rad/s). Math.PI = half a turn per second. */
+            public static final double DRIVER_MAX_ROTATION = Math.PI;
+
+            /**
+             * Pose estimator standard deviations [x (m), y (m), heading (rad)].
+             * Lower = trust that source more.
+             */
+            public static final Matrix<N3, N1> ODOMETRY_STD_DEV = VecBuilder.fill(0.02, 0.02, 0.05);
+            public static final Matrix<N3, N1> VISION_STD_DEV   = VecBuilder.fill(0.02, 0.02, 0.05);
+
+            /**
+             * Scale factor applied to measured drive distance and speed. Use to
+             * correct for worn wheels (1.0 = no correction). Do not set to zero.
+             */
+            public static final double DRIVE_METERS_SCALE = 1.0;
+
+            /** Proportional gain for heading control (rad/s per radian of error). Used everywhere the robot turns. */
             public static final double HEADING_KP = 5.5;
 
-            /** PID gains for the rotation controller in moveThroughPose. */
-            public static final double THETA_KP = 4.0;
-            public static final double THETA_KI = 0.0;
-            public static final double THETA_KD = 0.1;
-
             /**
-             * Default pass radius for moveThroughPose (meters).
-             * How close the robot must get before the waypoint is considered passed.
-             */
-            public static final double MOVE_THROUGH_DEFAULT_RADIUS = 0.3;
-
-            /**
-             * Stall detection for moveThroughPose.
-             * If the robot moves less than STALL_THRESHOLD meters over STALL_TIMEOUT seconds,
-             * the command exits to prevent a permanent block.
+             * Stuck detection for auto driving (routes and driveForwardMeters). If
+             * the robot moves less than STALL_THRESHOLD meters over STALL_TIMEOUT
+             * seconds, the drive gives up so the auto can continue instead of
+             * pushing into a wall forever.
              */
             public static final double STALL_THRESHOLD = 0.02; // meters
             public static final double STALL_TIMEOUT   = 1.5;  // seconds
 
-            /** Wall-clock deadline for moveThroughPose: exits if the command runs longer than this. */
-            public static final double MAX_MOVETHROUGH_SECONDS = 5.0;
-
-            /** Arrival threshold for driveToPoint / driveForwardMeters (meters). */
+            /** How close counts as "arrived" at an endpoint, and for driveForwardMeters (meters). */
             public static final double ARRIVE_THRESHOLD = 0.05; // 5 cm
 
             /**
-             * P gain for the APF deceleration ramp in driveToPoint / driveForwardMeters.
-             * Deceleration begins at cruiseVelocity / ARRIVE_KP meters from the target.
-             * At MAX_SPEED (5.04 m/s): ARRIVE_KP=2.5 → decel starts ~2.0 m out.
+             * Slow-down gain on the way into an endpoint: speed = ARRIVE_KP × distance
+             * (m/s per meter). Slowing starts at cruiseSpeed / ARRIVE_KP meters out:
+             * at 5.04 m/s with ARRIVE_KP = 2.5, about 2.0 m from the endpoint.
              */
             public static final double ARRIVE_KP = 2.5;
 
-            /** Finish angle tolerance for pointToTarget / changeHeading (degrees). */
+            /**
+             * Heading tolerance (degrees) for endpoints with .heading() / .facing(),
+             * and for the turn-in-place commands (pointToTarget, changeHeading).
+             */
             public static final double HEADING_TOLERANCE_DEG = 3.0;
+
+            /** Turn-in-place commands give up after this long, so a pinned robot can't stall an auto (seconds). */
+            public static final double MAX_TURN_SECONDS = 2.0;
 
             /**
              * Lead time for motion compensation in maintainHeadingToTarget (seconds).
@@ -251,6 +126,67 @@ public class Constants {
              */
             public static final double AIM_LEAD_TIME = 0.25;
         }
+    }
+
+    // ============================================================
+    // Autonomous routes: how accurate checkpoints must be, and the
+    // route runner's safety limits. See robot/auto/AutoSequence.java.
+    // ============================================================
+
+    public static final class kAuto {
+
+        /**
+         * How close a checkpoint (or waypoint) must be before it counts as
+         * reached: distance AND heading. Use in routines as
+         * {@code .checkpoint(node, Accuracy.TIGHT)}; NORMAL when left out.
+         *
+         * <p>Change a value here and every auto that uses it changes. Starting
+         * values come from the pass radii the 2026 autos used (0.1–0.7 m).
+         */
+        // TODO(SEASON SWERVE-9): tune these on the robot along with the other driving knobs.
+        public enum Accuracy {
+            /** Lining up before a bump or a narrow gap. */
+            PRECISE(0.10, 5.0),
+            /** Most checkpoints. */
+            TIGHT(0.20, 15.0),
+            /** The default when no accuracy is given. */
+            NORMAL(0.40, 30.0),
+            /** Roughly there; fastest. */
+            LOOSE(0.70, 45.0);
+
+            /** How close to the node's position (meters). */
+            public final double meters;
+            /** How close to the node's heading (degrees). */
+            public final double degrees;
+
+            Accuracy(double meters, double degrees) {
+                this.meters = meters;
+                this.degrees = degrees;
+            }
+        }
+
+        /**
+         * Within this distance of an endpoint (meters), the classic slow-down
+         * finishes the approach whichever driver is running, so endpoints are
+         * always precise. (The policy was trained to pass nodes at 0.65 m.)
+         */
+        public static final double ENDPOINT_HANDOFF = 0.65;
+
+        /** Give up on a node that takes longer than this (seconds). Catches circling. */
+        public static final double MAX_SECONDS_PER_NODE = 5.0;
+
+        /** How long the robot may sit on a node waiting for its heading before moving on (seconds). */
+        public static final double HEADING_WAIT_SECONDS = 1.0;
+
+        /**
+         * How long the robot may sit on a node waiting for a .holdUntil(...)
+         * condition before moving on anyway (seconds), so a jammed mechanism
+         * can't stop the whole auto. Use .by(...) on the node for a tighter limit.
+         */
+        public static final double HOLD_TIMEOUT_SECONDS = 3.0;
+
+        /** Policy routes: nodes must be at most this far apart (meters); the policy was trained on 1–6 m. */
+        public static final double POLICY_MAX_NODE_SPACING = 5.0;
     }
 
     // ============================================================
@@ -277,38 +213,5 @@ public class Constants {
             -0.202, 0.304, 0.39,
             new Rotation3d(0, 0, Math.toRadians(90))
         );
-    }
-
-    // ============================================================
-    // Shooter — dual flywheel (BLU CAN 19, YEL CAN 17), 1:1 gear ratio.
-    // ============================================================
-
-    public static final class kShooter {
-
-        public static final double MAX_RPM       = 4000.0;
-        public static final double LOB_RPM       = 2650.0;
-        public static final double SAFE_RPM      = 2800.0;
-        public static final double IDLE_RPM      = 500.0;
-        public static final double TOLERANCE_RPM = 20.0;
-
-        public static final MotorConfig BLU_CONFIG =
-            MotorConfig.builder(ControlMode.VELOCITY)
-                .inverted(true)
-                .withPID(0.1, 0.0, 0.02)
-                .withFeedforward(0.12231, 0.32, 0.0)
-                .withVoltageLimits(12.0, -12.0)
-                .withStatorCurrentLimit(Amps.of(110))
-                .withSimVelocityRps(66.7)
-                .build();
-
-        public static final MotorConfig YEL_CONFIG =
-            MotorConfig.builder(ControlMode.VELOCITY)
-                .inverted(false)
-                .withPID(0.1, 0.0, 0.02)
-                .withFeedforward(0.12231, 0.32, 0.0)
-                .withVoltageLimits(12.0, -12.0)
-                .withStatorCurrentLimit(Amps.of(110))
-                .withSimVelocityRps(66.7)
-                .build();
     }
 }
