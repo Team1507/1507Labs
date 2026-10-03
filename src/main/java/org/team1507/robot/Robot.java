@@ -14,6 +14,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 
 import org.team1507.lib.core.framework.LoggedRobot;
@@ -34,6 +35,7 @@ public final class Robot extends LoggedRobot {
 
     public final Swerve            swerve;
     public final QuestNavSubsystem questNav;
+    public final PolicyAssist      policy;
 
     // -------------------------------------------------------------------------
     // Controllers
@@ -56,6 +58,7 @@ public final class Robot extends LoggedRobot {
 
         // Subsystems — swerve first; questNav takes method references from it.
         swerve    = new Swerve();
+        policy    = new PolicyAssist();
         questNav  = new QuestNavSubsystem(
             swerve::addVisionMeasurement,
             swerve::resetPose,
@@ -97,6 +100,10 @@ public final class Robot extends LoggedRobot {
         // Swerve brake — hold Start to lock wheels in X pattern, release to resume driving
         driver.start().whileTrue(swerve.brakeCommand());
 
+        // Policy assist toggle — right bumper enables/disables the Python bridge policy.
+        // The robot falls back to raw joystick automatically if the bridge goes silent.
+        driver.rightBumper().onTrue(Commands.runOnce(() -> policy.setEnabled(!policy.isEnabled())));
+
         // Failsafe — cancels all running commands (see RobotBehaviors for details)
         driver.back().onTrue(RobotBehaviors.failsafe());
 
@@ -109,14 +116,36 @@ public final class Robot extends LoggedRobot {
 
         swerve.setDefaultCommand(
             swerve.driveCommand(() -> {
-                double x   = MathUtil.applyDeadband(-driver.getLeftY(),  0.12);
-                double y   = MathUtil.applyDeadband(-driver.getLeftX(),  0.12);
-                double rot = MathUtil.applyDeadband(-driver.getRightX(), 0.12);
+                // Raw values — no deadband — sent to the policy.
+                // The policy was trained on raw stick input with injected drift
+                // and learns to threshold internally.
+                double rawY   = -driver.getLeftY();
+                double rawX   = -driver.getLeftX();
+                double rawRot = -driver.getRightX();
 
+                policy.update(
+                    rawY, rawX, rawRot,
+                    swerve.getPose(),
+                    swerve.getChassisSpeeds(),
+                    swerve.getHeading().getRadians()
+                );
+
+                if (policy.isActive()) {
+                    ChassisSpeeds ps = policy.getPolicySpeeds();
+                    // Policy handles translation only (phase 1 — omega not trained).
+                    // Rotation comes directly from the driver so the right stick always works.
+                    double omega = MathUtil.applyDeadband(rawRot, 0.12) * Math.PI;
+                    return new ChassisSpeeds(ps.vxMetersPerSecond, ps.vyMetersPerSecond, omega);
+                }
+
+                // Fallback: apply deadband only on the raw joystick path.
+                double joyY   = MathUtil.applyDeadband(rawY,   0.12);
+                double joyX   = MathUtil.applyDeadband(rawX,   0.12);
+                double joyRot = MathUtil.applyDeadband(rawRot, 0.12);
                 return ChassisSpeeds.fromFieldRelativeSpeeds(
-                    x   * kSwerve.MAX_SPEED,
-                    y   * kSwerve.MAX_SPEED,
-                    rot * Math.PI,
+                    joyY   * kSwerve.MAX_SPEED,
+                    joyX   * kSwerve.MAX_SPEED,
+                    joyRot * Math.PI,
                     swerve.getHeading()
                 );
             })
