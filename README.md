@@ -6,7 +6,10 @@
 
 - **`main` is an exact copy of [1507Base](https://github.com/Team1507/1507Base)'s `SystemCore` branch** (WPILib 2027 alpha 7, Commands v3, the 2027 swerve, logging and auto route framework). Only Labs' own files differ: this README and `.claude/settings.local.json`. Nobody experiments on `main`.
 - **Each experiment gets its own branch** made from `main`, named `exp/<name>` (for example `exp/policy-driver`). CI builds and tests every branch on every push.
+- **Each experiment has one wiki page**, `Experiment-<Name>`, with its goal, status and results. The [wiki Home](https://github.com/Team1507/1507Labs/wiki) lists the active experiments.
 - Open the repo with **WPILib 2027 VS Code** (alpha 7). The 2026 VS Code can't build it.
+
+**Read the [Rules](https://github.com/Team1507/1507Labs/wiki/Rules) before starting an experiment:** naming, where documentation goes, keeping the change easy to promote, and how experiments end (promoted or stopped, tagged `exp-<name>-final`).
 
 ### Starting an experiment
 
@@ -31,15 +34,9 @@ Because `main` matches 1507Base, the experiment's changes are just `git diff mai
 
 The 2026 (RoboRIO) experiments are archived at tag **`labs-2026-final`** (branch `archive/2026-experiments`): Policy Assist over NetworkTables, the Shooter and ShooterModel, PathPlanner, AdvantageKit. They use 2026 APIs, so read them for ideas and redo them on a new `exp/` branch. The [Archive (2026)](https://github.com/Team1507/1507Labs/wiki/Archive-2026) wiki page catalogues them, along with the older Labs topics (Shooter PID Tuner, RRT, PhotonVision, Regression tools).
 
-## Planned experiments
+## Experiments
 
-| Experiment | Notes |
-|---|---|
-| **Policy driver** | Run the trained path policy (Swerve-Policy-Playground) in Java on SystemCore, for autos written with `new AutoSequence(Driver.POLICY)`. Plan: [docs/2027-auto-plan.md](docs/2027-auto-plan.md), sections 5 and 7 |
-| **Auto path tester** | Run every auto in the simulator and fail on a collision, leaving the field, and similar problems |
-| **Better simulation** | CTRE motor simulation plus a simulated battery (current draw, voltage sag) |
-
-See the 1507Base wiki for how the base works, and its **Future Plans** page for the ideas queued for Labs.
+The list of active, planned and finished experiments is on the [wiki Home](https://github.com/Team1507/1507Labs/wiki). See the 1507Base wiki for how the base works, and its **Future Plans** page for the ideas queued for Labs.
 
 ## Building
 
