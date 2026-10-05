@@ -9,7 +9,9 @@
 package org.team1507.robot;
 
 import org.wpilib.command3.button.CommandGamepad;
+import org.wpilib.system.Filesystem;
 
+import org.team1507.lib.core.auto.policy.PolicyRouteDriver;
 import org.team1507.lib.core.framework.LoggedRobot;
 import org.team1507.lib.core.framework.Subsystem1507;
 import org.team1507.robot.auto.AutoBuilder;
@@ -85,5 +87,11 @@ public final class Robot extends LoggedRobot {
         // Give auto routines access to the robot and all its subsystems. Last, so
         // everything above exists.
         AutoBuilder.init(this);
+
+        // 1507Labs exp/policy-driver: the trained policy for Driver.POLICY autos.
+        // If the file is missing or bad, the Driver Station shows why and policy
+        // autos refuse to build; classic autos are unaffected.
+        AutoBuilder.policyDriver = PolicyRouteDriver.loadOrNull(
+            Filesystem.getDeployDirectory().toPath().resolve("policy/randomizer_policy.json"));
     }
 }

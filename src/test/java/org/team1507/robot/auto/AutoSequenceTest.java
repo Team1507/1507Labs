@@ -352,8 +352,16 @@ class AutoSequenceTest {
 
     @Test
     void aPolicyAutoWithoutThePolicyIsAMistake() {
-        assertMistake("policy driver", new AutoSequence(Driver.POLICY)
-            .endpoint(node(2, 1, 0)));
+        // The robot installs the policy at startup (1507Labs exp/policy-driver),
+        // so take it away for this test.
+        var installed = AutoBuilder.policyDriver;
+        AutoBuilder.policyDriver = null;
+        try {
+            assertMistake("policy driver", new AutoSequence(Driver.POLICY)
+                .endpoint(node(2, 1, 0)));
+        } finally {
+            AutoBuilder.policyDriver = installed;
+        }
     }
 
     // ── Route checks ─────────────────────────────────────────────────────────
